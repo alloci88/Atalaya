@@ -28,11 +28,11 @@ public enum CostEvidence
 /// <param name="SampleSessions">De cuántas sesiones salen.</param>
 /// <param name="ObservedMaxPasses">Con qué tope se midieron. 0 si el historial no lo registra.</param>
 /// <param name="PassFactor">Cuánto se escala por la diferencia de tope. 1 cuando se midió con el mismo.</param>
-/// <param name="Billed">
-/// ¿El proveedor con el que se va a lanzar <b>factura a la organización</b>? (F16-RETOQUE §1).
-/// Cuando no —Claude Code va contra la suscripción de quien lo usa—, no hay coste que estimar y
-/// eso no es falta de datos: es la respuesta. Sin este campo, la pantalla decía «sin histórico
-/// suficiente para estimar», que manda a buscar unas medidas que no arreglarían nada.
+/// <param name="NoRateNote">
+/// Lo que declara el proveedor con el que se va a lanzar cuando su modelo <b>no lleva tarifa</b>
+/// (F16-RETOQUE §1, sin el <c>if</c> por nombre desde PROV-2 §3). Cuando lo declara, no hay coste
+/// que estimar y eso no es falta de datos: es la respuesta. Sin este campo, la pantalla decía «sin
+/// histórico suficiente para estimar», que manda a buscar unas medidas que no arreglarían nada.
 /// </param>
 public sealed record CostEstimate(
     int Units,
@@ -45,8 +45,11 @@ public sealed record CostEstimate(
     int ObservedMaxPasses,
     decimal PassFactor,
     CostEvidence Evidence,
-    bool Billed = true)
+    string? NoRateNote = null)
 {
+    /// <summary>Su casa dice que este consumo no lleva precio, así que no hay nada que estimar.</summary>
+    public bool IsUnpriced => NoRateNote is { Length: > 0 };
+
     /// <summary>Cuántas unidades, en castellano.</summary>
     public string UnitsLabel => Units == 1 ? "1 unidad" : $"{Units} unidades";
 
@@ -58,7 +61,7 @@ public sealed record CostEstimate(
     {
         get
         {
-            if (!Billed)
+            if (IsUnpriced)
             {
                 return $"{UnitsLabel} · sin coste para la organización";
             }
@@ -85,11 +88,10 @@ public sealed record CostEstimate(
     {
         get
         {
-            if (!Billed)
+            if (IsUnpriced)
             {
-                return "El consumo de Claude Code va contra tu suscripción y no factura a la "
-                    + "organización, así que no hay coste que estimar. Las llamadas y los tokens de "
-                    + "la sesión sí quedan registrados.";
+                return $"Este consumo no lleva tarifa: {NoRateNote}. No hay coste que estimar; las "
+                    + "llamadas y los tokens de la sesión sí quedan registrados.";
             }
 
             if (Evidence == CostEvidence.Ninguna)
@@ -125,7 +127,7 @@ public sealed record CostEstimate(
     /// Hay que advertir de que el número es flojo. Con una casa que no factura NO se advierte de
     /// nada: no hay número que sostener, y un ⚠ ahí solo enseñaría a ignorar los ⚠ de verdad.
     /// </summary>
-    public bool IsWeak => Billed && Evidence != CostEvidence.Suficiente;
+    public bool IsWeak => !IsUnpriced && Evidence != CostEvidence.Suficiente;
 }
 
 /// <summary>
@@ -169,15 +171,18 @@ public sealed class CostEstimator
     public CostEstimator(HubContext hub) => _hub = hub;
 
     /// <summary>
-    /// ¿Es esta sesión de ese proveedor? Una sesión sin proveedor escrito es anterior a F14 y por
-    /// tanto de Copilot: no había otro. Tratarla como «desconocida» dejaría a Copilot sin histórico
-    /// justo en los hubs con más historia, que es donde la estimación vale más.
+    /// ¿Es esta sesión de ese proveedor? Una sesión sin proveedor escrito es anterior a F14 y es
+    /// de quien reclame ese histórico: no había otro. Tratarla como «desconocida» dejaría a esa
+    /// casa sin histórico justo en los hubs con más historia, que es donde la estimación vale más.
+    /// Quién lo reclama lo declara el contrato, y aquí llega ya resuelto (PROV-2 §3).
     /// </summary>
-    private static bool SameProvider(AuditSession session, string providerId)
+    private static bool SameProvider(
+        AuditSession session, string providerId, Func<string?, ProviderCostTraits> traits)
         => string.Equals(
-            string.IsNullOrWhiteSpace(session.Provider) ? "copilot" : session.Provider,
-            providerId,
+            traits(session.Provider).ProviderId ?? session.Provider,
+            traits(providerId).ProviderId ?? providerId,
             StringComparison.OrdinalIgnoreCase);
+
 
     /// <summary>
     /// Lo que costó cada unidad de una sesión, en credits, con la tarifa del modelo de ESA sesión.
@@ -185,20 +190,21 @@ public sealed class CostEstimator
     /// simplemente no entra en la media: una estimación con datos a medias es peor que decir que no
     /// hay datos.
     /// </summary>
-    private static List<decimal> CostOfUnits(AuditSession session, ModelRateTable? rates)
+    private static List<decimal> CostOfUnits(
+        AuditSession session, ModelRateTable? rates, Func<string?, ProviderCostTraits> traits)
     {
         var costs = new List<decimal>();
 
         foreach (UnitUsageBreakdown unit in session.UsageBreakdown)
         {
-            CostResult cost = CreditCalculator.Calculate(
+            CostResult cost = CostCalculator.Calculate(
                 session.Model, session.Provider,
                 unit.InputTokens, unit.OutputTokens, unit.CacheReadTokens, unit.CacheWriteTokens,
-                rates);
+                rates, traits(session.Provider));
 
-            if (cost.Credits is { } credits)
+            if (cost.Usd is { } usd)
             {
-                costs.Add(credits);
+                costs.Add(usd);
             }
         }
 
@@ -207,44 +213,41 @@ public sealed class CostEstimator
 
     /// <summary>Estima para una aplicación del hub, con el proveedor que vaya a auditar.</summary>
     public CostEstimate Estimate(string slug, int units, int maxPasses, string? providerId = null)
-        => Estimate(_hub.Store.ListSessions(slug), units, maxPasses, providerId, Rates());
-
-    private ModelRateTable? Rates()
-    {
-        try
-        {
-            return _hub.Store.TryReadModelRates();
-        }
-        catch (Exception)
-        {
-            return null;
-        }
-    }
+        => Estimate(
+            _hub.Store.ListSessions(slug), units, maxPasses, providerId,
+            _hub.ModelRates(), _hub.CostTraits);
 
     /// <summary>El cálculo, sobre una lista de sesiones y nada más. Puro: se prueba sin hub.</summary>
     /// <param name="providerId">
-    /// Con quién se va a auditar (F14). Solo entran en la media las sesiones de ESA casa: Copilot
-    /// gastó peticiones premium y Claude Code informó dólares de tarifa de lista, así que promediar
-    /// las dos daría un número en ninguna unidad. Null = sin filtrar, que es lo que hacía antes de
-    /// que hubiera un segundo proveedor y sigue valiendo para un hub que solo tiene sesiones de una.
+    /// Con quién se va a auditar (F14). Solo entran en la media las sesiones de ESA casa: dos casas
+    /// cuentan sus tokens de forma distinta y pueden tener tarifas distintas, así que promediar las
+    /// dos daría un número de nadie. Null = sin filtrar, que es lo que hacía antes de que hubiera un
+    /// segundo proveedor y sigue valiendo para un hub que solo tiene sesiones de una.
     /// </param>
+    /// <param name="traits">Lo que declara cada casa del coste (PROV-2 §3). Null: el histórico.</param>
     public static CostEstimate Estimate(
         IReadOnlyList<AuditSession> sessions,
         int units,
         int maxPasses,
         string? providerId = null,
-        ModelRateTable? rates = null)
+        ModelRateTable? rates = null,
+        Func<string?, ProviderCostTraits>? traits = null)
     {
         maxPasses = Math.Max(1, maxPasses);
+        Func<string?, ProviderCostTraits> rasgos = traits ?? ProviderCostTraits.Default;
+        ProviderCostTraits casa = rasgos(providerId);
 
-        // F16-RETOQUE §1 — si esta casa no factura, no hay nada que estimar y se dice así. Antes se
-        // caía por el camino de «no hay medidas», que manda a buscar un histórico que no existiría
-        // nunca porque esas sesiones no producen coste por definición.
-        if (!CreditCalculator.IsBilled(providerId))
+        // F16-RETOQUE §1 — si esta casa declara que su consumo no lleva tarifa Y no hay ninguna
+        // escrita para ella, no hay nada que estimar y se dice así. Antes se caía por el camino de
+        // «no hay medidas», que manda a buscar un histórico que no existiría nunca. Desde PROV-2
+        // §3 lo declara ella, la frase es suya, y la puerta se abre sola el día que alguien le
+        // escriba una tarifa: entonces se estima como con cualquier otra.
+        if (casa.NoRateNote is { Length: > 0 } note
+            && rates?.HasAnyFor(casa.ProviderId ?? providerId) != true)
         {
             return new CostEstimate(
                 units, maxPasses, null, null, DefaultCostUnit, 0, 0, 0, 1m,
-                CostEvidence.Ninguna, Billed: false);
+                CostEvidence.Ninguna, NoRateNote: note);
         }
 
         // F15 — se mide sobre TOKENS, no sobre el coste que guardó la sesión. El coste guardado de
@@ -252,8 +255,8 @@ public sealed class CostEstimator
         // son el hecho primario y siguen valiendo. Cada sesión se convierte a credits con la tarifa
         // de SU modelo, así que un histórico con modelos distintos promedia costes comparables.
         var measured = sessions
-            .Where(s => providerId is null || SameProvider(s, providerId))
-            .Where(s => CostOfUnits(s, rates).Count > 0)
+            .Where(s => providerId is null || SameProvider(s, providerId, rasgos))
+            .Where(s => CostOfUnits(s, rates, rasgos).Count > 0)
             .OrderByDescending(s => s.StartedUtc)
             .ToList();
 
@@ -283,7 +286,7 @@ public sealed class CostEstimator
             factor = observedCap > 0 ? (decimal)maxPasses / observedCap : 1m;
         }
 
-        var samples = chosen.SelectMany(s => CostOfUnits(s, rates)).ToList();
+        var samples = chosen.SelectMany(s => CostOfUnits(s, rates, rasgos)).ToList();
 
         decimal perUnit = samples.Average();
         string costUnit = DefaultCostUnit;

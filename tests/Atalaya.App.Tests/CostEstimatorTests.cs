@@ -44,7 +44,7 @@ public sealed class CostEstimatorTests
             s.UsageBreakdown.Add(new UnitUsageBreakdown
             {
                 Unit = $"U{i}.cs",
-                OutputTokens = TestRates.OutputFor(perUnitCosts[i]),
+                OutputTokens = TestRates.OutputForCredits(perUnitCosts[i]),
             });
         }
 
@@ -65,11 +65,11 @@ public sealed class CostEstimatorTests
         CostEstimate e = CostEstimator.Estimate(sessions, units: 47, maxPasses: 5, rates: TestRates.Table());
 
         e.Evidence.Should().Be(CostEvidence.Suficiente);
-        e.CostPerUnit.Should().Be(20m, "(10 + 20 + 30 + 20) / 4");
+        e.CostPerUnit.Should().Be(TestRates.UsdPerCredit * 20m, "(10 + 20 + 30 + 20) / 4");
         e.SampleUnits.Should().Be(4);
         e.SampleSessions.Should().Be(2);
         e.PassFactor.Should().Be(1m, "se midieron con el mismo tope que el vigente");
-        e.Total.Should().Be(940m, "47 × 20");
+        e.Total.Should().Be(TestRates.UsdPerCredit * 940m, "47 × 20");
     }
 
     [Fact]
@@ -156,8 +156,8 @@ public sealed class CostEstimatorTests
         CostEstimate e = CostEstimator.Estimate(sessions, units: 20, maxPasses: 5, rates: TestRates.Table());
 
         e.Evidence.Should().Be(CostEvidence.Escasa);
-        e.CostPerUnit.Should().Be(12m);
-        e.Total.Should().Be(240m, "sigue siendo un número útil, solo que flojo");
+        e.CostPerUnit.Should().Be(TestRates.UsdPerCredit * 12m);
+        e.Total.Should().Be(TestRates.UsdPerCredit * 240m, "sigue siendo un número útil, solo que flojo");
         e.Provenance.Should().StartWith("Estimación con pocos datos")
             .And.Contain("1 unidad medida")
             .And.Contain("la última sesión");
@@ -174,7 +174,7 @@ public sealed class CostEstimatorTests
 
         e.ObservedMaxPasses.Should().Be(2);
         e.PassFactor.Should().Be(3m, "6 / 2");
-        e.Total.Should().Be(120m, "4 × 10 × 3");
+        e.Total.Should().Be(TestRates.UsdPerCredit * 120m, "4 × 10 × 3");
         e.Breakdown.Should().Contain("× 6/2 pasadas", "el factor se ve, no se esconde en el total");
         e.Provenance.Should().Contain("tope de 2 pasadas").And.Contain("sobreestima");
     }
@@ -195,8 +195,8 @@ public sealed class CostEstimatorTests
         CostEstimate e = CostEstimator.Estimate(sessions, units: 10, maxPasses: 5, rates: TestRates.Table());
 
         e.PassFactor.Should().Be(1m);
-        e.CostPerUnit.Should().Be(7m);
-        e.Total.Should().Be(70m);
+        e.CostPerUnit.Should().Be(TestRates.UsdPerCredit * 7m);
+        e.Total.Should().Be(TestRates.UsdPerCredit * 70m);
     }
 
     [Fact]
@@ -209,7 +209,7 @@ public sealed class CostEstimatorTests
 
         e.ObservedMaxPasses.Should().Be(0);
         e.PassFactor.Should().Be(1m);
-        e.Total.Should().Be(50m);
+        e.Total.Should().Be(TestRates.UsdPerCredit * 50m);
         e.Provenance.Should().Contain("no registra con qué tope");
         e.Breakdown.Should().NotContain("pasadas", "no hay factor que enseñar");
     }
@@ -220,6 +220,6 @@ public sealed class CostEstimatorTests
         CostEstimate e = CostEstimator.Estimate(new[] { Session(1, 1, 3m, 3m, 3m) }, units: 2, maxPasses: 0, rates: TestRates.Table());
 
         e.MaxPasses.Should().Be(1);
-        e.Total.Should().Be(6m);
+        e.Total.Should().Be(TestRates.UsdPerCredit * 6m);
     }
 }

@@ -178,6 +178,9 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
     [ObservableProperty] private decimal? _cost;
     [ObservableProperty] private string _costUnit = CostFormat.Unit;
 
+    /// <inheritdoc cref="LiveSessionService.CostLens"/>
+    [ObservableProperty] private CostLens _costLens = CostFormat.Lens;
+
     /// <summary>
     /// Lo que el PROVEEDOR declara que ha costado, en su unidad, tal cual lo dice (F16-RETOQUE §1).
     /// <para>
@@ -595,7 +598,7 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
             string report = ReportBuilder.BuildFixReport(
                 _app, session, finding, Files.Select(f => (f.RelativePath, f.Tally, f.InScope)).ToList(),
                 Summary, Risks, Commit.Title, Commit.Description, HasBuildResult ? LastVerdict : null,
-                _hub.OrganizationName, TestSituation, ModelRates());
+                _hub.OrganizationName, TestSituation, ModelRates(), _agent);
             _hub.Store.WriteReport(Slug, SessionId, report);
             ReportPath = _hub.HubPaths.ReportFile(Slug, SessionId);
 
@@ -1551,7 +1554,7 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
     {
         try
         {
-            return _hub.Store.TryReadModelRates();
+            return _hub.ModelRates();
         }
         catch (Exception)
         {
@@ -1570,13 +1573,15 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         // de auditoría. El número que informa el proveedor está en peticiones premium, la unidad
         // que GitHub retiró: enseñarlo sería enseñar una moneda que ya no existe.
         //
-        // F16-RETOQUE §1 — y si esta casa no factura a la organización, `Calculate` lo dice y no
-        // hay número: el pie enseña llamadas y tokens, y el coste se lee «incluido en tu
-        // suscripción de Claude».
-        CostResult = CreditCalculator.Calculate(
-            Model, Provider, InputTokens, OutputTokens, CacheReadTokens, CacheWriteTokens, ModelRates());
-        Cost = CostResult.Credits;
-        CostUnit = CostFormat.BillingUnit;
+        // F16-RETOQUE §1 — y si esta casa declara qué se lee cuando su modelo no lleva tarifa,
+        // `Calculate` lo trae y no hay número: el pie enseña llamadas y tokens, y el coste se lee
+        // con la frase que esa casa declara.
+        CostResult = CostCalculator.Calculate(
+            Model, Provider, InputTokens, OutputTokens, CacheReadTokens, CacheWriteTokens,
+            ModelRates(), _agent?.CostTraits());
+        Cost = CostResult.Usd;
+        CostLens = CostLens.For(_agent?.Billing, CostFormat.Currency);
+        CostUnit = CostLens.LongSymbol;
 
         // Y lo que el proveedor DECLARA, aparte y sin mezclarse con lo anterior: es un dato suyo,
         // no una cuenta nuestra, y solo vale para dejarlo escrito en el informe.

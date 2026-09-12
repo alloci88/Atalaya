@@ -90,6 +90,30 @@ public sealed class AuditorProviderRegistry : IAsyncDisposable
         => WhoWrote(providerId)?.Billing ?? ProviderBilling.Default;
 
     /// <summary>
+    /// <b>Lo que el cálculo del coste necesita saber de la casa que escribió una sesión</b>
+    /// (PROV-2 §3): con qué identificador se busca su tarifa, cómo cuenta sus tokens de entrada y
+    /// qué se lee cuando su modelo no lleva precio.
+    /// <para>
+    /// Es la puerta del dominio a las capacidades. El dominio no conoce proveedores y además relee
+    /// historia escrita por casas que esta versión puede no traer, así que esto se resuelve aquí
+    /// una vez y viaja con las tarifas dentro de <see cref="CostLookup"/>.
+    /// </para>
+    /// <para>
+    /// El identificador que sale <b>no es siempre el que la sesión escribió</b>: una anterior a
+    /// F14 no escribió ninguno y la tarifa está a nombre de quien reclama ese histórico. De una
+    /// casa retirada se conserva lo escrito —su tarifa puede seguir en la tabla— y se supone la
+    /// forma de contar del de fábrica, que es la del histórico.
+    /// </para>
+    /// </summary>
+    public ProviderCostTraits CostTraitsOf(string? providerId)
+    {
+        IAuditorProvider? who = WhoWrote(providerId);
+        return who is null
+            ? new ProviderCostTraits(providerId, Fallback.Accounting)
+            : new ProviderCostTraits(who.ProviderId, who.Accounting, who.Billing.NoRateNote);
+    }
+
+    /// <summary>
     /// El proveedor con el que se lanzaría una sesión AHORA. Se resuelve en cada lectura: cambiar
     /// el proveedor en Ajustes surte efecto en la siguiente sesión sin reiniciar la aplicación.
     /// <para>
@@ -192,4 +216,16 @@ public sealed class AuditorProviderRegistry : IAsyncDisposable
             }
         }
     }
+}
+
+/// <summary>
+/// Lo que una casa declara del coste, cuando ya se tiene a la casa delante (PROV-2 §3). La sesión
+/// en vivo, el arreglo y el presupuesto conocen su proveedor: no tienen que buscarlo en el
+/// registro, solo preguntarle.
+/// </summary>
+public static class ProviderCostCapabilities
+{
+    /// <inheritdoc cref="AuditorProviderRegistry.CostTraitsOf"/>
+    public static ProviderCostTraits CostTraits(this IAuditorProvider provider)
+        => new(provider.ProviderId, provider.Accounting, provider.Billing.NoRateNote);
 }

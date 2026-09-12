@@ -130,7 +130,9 @@ public sealed class ButtonStatesTests : IDisposable
                 Labels = new[] { "L" },
                 Series = new[]
                 {
-                    new ChartSeries("app", "App", Brushes.Blue, new[] { 400d }, ChartSeriesKind.Line, false),
+                    // Los valores de una serie de coste son DÓLARES desde PROV-2 §3: 4 $ son los
+                    // 400 credits de siempre, y el eje tiene que decirlo en la unidad que toque.
+                    new ChartSeries("app", "App", Brushes.Blue, new[] { 4d }, ChartSeriesKind.Line, false),
                 },
             };
 
@@ -141,18 +143,23 @@ public sealed class ButtonStatesTests : IDisposable
             marcas.AddRange(plot.Children.OfType<TextBlock>().Select(t => t.Text));
         });
 
-        // Las marcas del eje de una serie que llega a 400 credits: 0, 100, 200, 300 y 400.
-        foreach (decimal tick in new[] { 100m, 200m, 400m })
+        // Las marcas del eje de una serie que llega a 4 $ —los 400 credits de siempre—.
+        foreach (decimal tick in new[] { 1m, 2m, 4m })
         {
             marcas.Should().Contain(CostFormat.Tick(tick),
-                $"la marca de {tick} credits la escribe CostFormat, no la gráfica");
+                $"la marca de {tick} $ la escribe CostFormat, no la gráfica");
         }
 
         if (currency == CostCurrency.Usd)
         {
             marcas.Should().NotContain("400",
-                "con la divisa en dólares, 400 credits son 4,00 $ — pintar el 400 tal cual es "
-                + "multiplicar por cien lo que dice la tarjeta del periodo");
+                "con la divisa en dólares, 4 $ no se pintan como los 400 credits que son: "
+                + "sería multiplicar por cien lo que dice la tarjeta del periodo");
+        }
+        else
+        {
+            marcas.Should().Contain("400",
+                "y con la moneda de la casa sí: 4 $ son 400 credits, como la tarjeta");
         }
     }
 

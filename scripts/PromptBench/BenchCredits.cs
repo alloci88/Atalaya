@@ -3,12 +3,12 @@ namespace Atalaya.PromptBench;
 /// <summary>
 /// <b>Poner precio a los tokens del banco, para poder comparar dos brazos</b> (M2).
 /// <para>
-/// <b>Esto NO es el coste de una sesión y no puede leerse como tal.</b> Claude Code no factura a la
-/// organización —<c>CreditCalculator.IsBilled("claude-code")</c> es <c>false</c> desde
-/// F16-RETOQUE—, así que una sesión suya no tiene credits y la aplicación, con toda la razón, no se
-/// los inventa. Lo que hace falta aquí es otra cosa: una <b>valoración</b> con una tarifa fija que
-/// permita decir «este brazo cuesta la mitad que el otro» sin comparar cuatro columnas de tokens a
-/// ojo.
+/// <b>Esto NO es el coste de una sesión y no puede leerse como tal.</b> La siembra no le escribe
+/// ninguna tarifa a Claude Code —su consumo va contra la suscripción de quien lo usa—, así que
+/// para la aplicación una sesión suya no tiene importe y, con toda la razón, no se lo inventa
+/// (PROV-2 §3; antes lo paraba un <c>IsBilled</c> por nombre). Lo que hace falta aquí es otra
+/// cosa: una <b>valoración</b> con una tarifa fija que permita decir «este brazo cuesta la mitad
+/// que el otro» sin comparar cuatro columnas de tokens a ojo.
 /// </para>
 /// <para>
 /// <b>La tarifa es la de Opus publicada</b>, la misma con la que F20 reprodujo AL CREDIT la factura

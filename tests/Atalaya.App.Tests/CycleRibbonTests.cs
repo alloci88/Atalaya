@@ -84,7 +84,7 @@ public sealed class CycleRibbonTests : IDisposable
 
         if (cost is not null)
         {
-            TestRates.CostAs(s, cost, inputTokens: 100);
+            TestRates.CostAsCredits(s, cost, inputTokens: 100);
         }
 
         _hub.Store.WriteSession(s);
@@ -321,7 +321,7 @@ public sealed class CycleRibbonTests : IDisposable
 
         c1.NewFindings.Should().Be(2);
         c1.ResolvedFindings.Should().Be(1);
-        c1.Cost.Should().Be(15.5m);
+        c1.Cost.Should().Be(TestRates.UsdPerCredit * 15.5m);
         c1.Audited.Should().Be(4);
         c1.Auditable.Should().Be(5);
 

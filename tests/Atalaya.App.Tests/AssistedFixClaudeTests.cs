@@ -515,7 +515,7 @@ public sealed class AssistedFixClaudeTests : IDisposable
 
         fix.HasFinished.Should().BeTrue(fix.FailureMessage);
         fix.InputTokens.Should().BeGreaterThan(0, "los tokens se siguen registrando: son dato primario");
-        fix.CostResult.Why.Should().Be(CostUnavailable.NotBilled);
+        fix.CostResult.IsUnpriced.Should().BeTrue();
 
         view.CostText.Should().Contain("llamadas").And.Contain("entrada").And.Contain("salida");
         // F17-RETOQUE: el orden es llamadas → coste → tokens; el coste ya no va el último.
@@ -529,17 +529,18 @@ public sealed class AssistedFixClaudeTests : IDisposable
     }
 
     /// <summary>
-    /// Y aunque la organización tenga una tarifa escrita para ese modelo, tampoco se usa: el freno
-    /// está en el cálculo, no en que falte el dato. Es el test que se pondría rojo si alguien
-    /// volviera a colar a esta casa por el camino de las tarifas.
+    /// <b>Y si la organización escribe una tarifa para ese modelo Y esa casa, sí se tarifa</b>
+    /// (PROV-2 §3). Es la mitad de la regla que antes no se veía: el freno nunca fue la casa, es
+    /// que nadie le había puesto precio. Este test se pondría rojo si alguien volviera a meter un
+    /// <c>if</c> por nombre en el camino del coste.
     /// </summary>
     [Fact]
-    public async Task Aunque_haya_tarifa_escrita_para_su_modelo_no_se_tarifa()
+    public async Task Con_tarifa_escrita_para_su_casa_y_su_modelo_si_se_tarifa()
     {
         _hub.Store.WriteModelRates(new ModelRateTable
         {
-            Source = "Una tarifa heredada de la siembra vieja, atada a claude-code.",
-            Rates = { new ModelRate("opus", 1m, 5m, 0.1m, 2m, ClaudeCodeProvider.Id) },
+            Source = "Una tarifa escrita a mano para la casa opcional.",
+            Rates = { new ModelRate("opus", ClaudeCodeProvider.Id, 1m, 5m, 0.1m, CacheWritePerMillion: 2m) },
         });
         Script("""call fix_done {"summary":"hecho","commitTitle":"Arregla BUG-0003","commitDescription":"d"}""");
 
@@ -548,8 +549,9 @@ public sealed class AssistedFixClaudeTests : IDisposable
         await fix.StartAsync(new FixSessionRequest(Slug, _findingId));
 
         fix.HasFinished.Should().BeTrue(fix.FailureMessage);
-        fix.CostResult.Credits.Should().BeNull();
-        view.CostText.Should().NotContain("credits");
+        fix.CostResult.Usd.Should().NotBeNull("con precio escrito no hay nada que excusar");
+        fix.CostResult.IsUnpriced.Should().BeFalse();
+        view.CostText.Should().NotContain("suscripción");
     }
 
     /// <summary>
@@ -716,11 +718,15 @@ public sealed class AssistedFixClaudeTests : IDisposable
     /// Una tarifa para el modelo de estas sesiones, atada a su casa. Sin ella el coste sale «no
     /// calculable (tarifa no configurada)», que es correcto pero no es lo que estos tests miran.
     /// </summary>
+    /// <summary>
+    /// La tabla de la ORGANIZACION: las tarifas de la casa de fabrica, que es la que le factura
+    /// (PROV-2 §3). Ninguna es de la casa opcional, y por eso su consumo no lleva precio.
+    /// </summary>
     private void SeedRates()
         => _hub.Store.WriteModelRates(new ModelRateTable
         {
-            Source = "Tarifa de test para el arreglo con Claude Code.",
-            Rates = { new ModelRate("opus", 1m, 5m, 0.1m, 2m, ClaudeCodeProvider.Id) },
+            Source = "Tarifa de test de la casa de fabrica.",
+            Rates = { new ModelRate("opus", TestProviders.Copilot.ProviderId, 1m, 5m, 0.1m, CacheWritePerMillion: 2m) },
         });
 
     /// <summary>El guion de la verificación que cierra el ciclo: un veredicto y nada más.</summary>

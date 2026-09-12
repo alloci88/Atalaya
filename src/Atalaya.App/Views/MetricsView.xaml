@@ -184,6 +184,15 @@
                                TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Bottom}"
                                Visibility="{Binding CostScopeNote, Converter={StaticResource NotEmptyToVisibility}}" />
 
+                    <!-- PROV-2 §3 — POR QUÉ EL COSTE VA EN DÓLARES. Una línea, en el mismo sitio
+                         y con el mismo estilo que la nota de alcance de arriba, y solo cuando en
+                         el periodo ha gastado más de un proveedor: sus monedas no se suman, así
+                         que la preferencia de esta máquina cede ante el gasto. Ninguna tarjeta ni
+                         gráfica cambia de sitio por esto. -->
+                    <TextBlock Text="{Binding CostCurrencyNote}" Style="{StaticResource Text.Meta}"
+                               TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Bottom}"
+                               Visibility="{Binding CostCurrencyNote, Converter={StaticResource NotEmptyToVisibility}}" />
+
                     <ItemsControl ItemsSource="{Binding Cards}" Margin="{StaticResource Pad.M.Bottom}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -299,6 +308,7 @@
                                 TooltipLabels="{Binding CostRanges}"
                                 IsCost="True"
                                 Unit="{Binding CostUnit}"
+                                CostLens="{Binding CostLens}"
                                 AxisBrush="{DynamicResource Brush.TextMuted}"
                                 GridBrush="{DynamicResource Brush.Line}"
                                 Visibility="{Binding HasCost, Converter={StaticResource BoolToVisibility}}" />

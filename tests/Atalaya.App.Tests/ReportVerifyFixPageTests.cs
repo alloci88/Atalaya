@@ -56,7 +56,7 @@ public sealed class ReportVerifyFixPageTests
         CycleN = 1,
         StartedUtc = Start,
         EndedUtc = Start.AddSeconds(48),
-        Usage = new UsageTotals { OutputTokens = TestRates.OutputFor(15m), Calls = 4 },
+        Usage = new UsageTotals { OutputTokens = TestRates.OutputForCredits(15m), Calls = 4 },
     };
 
     private static ReportBuilder.VerifyLine Line(
@@ -94,7 +94,7 @@ public sealed class ReportVerifyFixPageTests
             "app", "App", session.Id.ToString(), "no-existe.md", "Verificación — App",
             ReportKind.Verificacion, session.StartedUtc, ReportDateSource.Session, session.By,
             "Verify", null, null, null,
-            CreditCalculator.Calculate(session, TestRates.Table()).Credits,
+            CostCalculator.Calculate(session, TestRates.Table()).Usd,
             CostFormat.BillingUnit, HasSession: true, Session: session);
 
         return (entry, session, body);
@@ -120,7 +120,7 @@ public sealed class ReportVerifyFixPageTests
         CycleN = 1,
         StartedUtc = Start,
         EndedUtc = Start.AddSeconds(54),
-        Usage = new UsageTotals { OutputTokens = TestRates.OutputFor(27m), Calls = 10 },
+        Usage = new UsageTotals { OutputTokens = TestRates.OutputForCredits(27m), Calls = 10 },
         FixFindingId = findingId,
         FixFindingAlias = alias,
     };
@@ -211,7 +211,7 @@ public sealed class ReportVerifyFixPageTests
             "app", "App", session.Id.ToString(), "no-existe.md", "Arreglo asistido — App",
             ReportKind.Sesion, session.StartedUtc, ReportDateSource.Session, session.By, "Fix",
             null, null, null,
-            CreditCalculator.Calculate(session, TestRates.Table()).Credits,
+            CostCalculator.Calculate(session, TestRates.Table()).Usd,
             CostFormat.BillingUnit, HasSession: true,
             FindingId: finding.Id.ToString(), FindingAlias: finding.DisplayId, Session: session);
 
@@ -238,7 +238,7 @@ public sealed class ReportVerifyFixPageTests
     /// <b>Cada cifra de una verificación está escrita en su informe</b>, con las mismas palabras.
     /// <para>
     /// El recuento y los veredictos salen del CUERPO —el registro no los tiene, y el §0 lo midió—;
-    /// el coste y la duración, del registro, con el mismo <c>CreditCalculator</c> que escribió el
+    /// el coste y la duración, del registro, con el mismo <c>CostCalculator</c> que escribió el
     /// informe. En los dos casos el resultado tiene que aparecer literalmente en el markdown: si no
     /// aparece, es que la página se lo ha inventado.
     /// </para>
@@ -263,7 +263,7 @@ public sealed class ReportVerifyFixPageTests
 
         ReportStat coste = page.Stats.Single(s => s.Key == "cost");
         coste.Value.Should().Be("15,0");
-        body.Should().Contain("15,0 AI credits", "el coste sale del mismo CreditCalculator");
+        body.Should().Contain("15,0 AI credits", "el coste sale del mismo CostCalculator");
         coste.Subtitle.Should().BeEmpty(
             "un arreglo arregla un hallazgo y una verificación verifica uno: no hay reparto");
 
@@ -349,7 +349,7 @@ public sealed class ReportVerifyFixPageTests
         var entry = new ReportEntry(
             "app", "App", session.Id.ToString(), "x.md", "t", ReportKind.Verificacion,
             session.StartedUtc, ReportDateSource.Session, session.By, "Verify", null, null, null,
-            CreditCalculator.Calculate(session, TestRates.Table()).Credits,
+            CostCalculator.Calculate(session, TestRates.Table()).Usd,
             CostFormat.BillingUnit, HasSession: true, Session: session);
 
         ReportPage page = ReportPage.Compose(entry, session, body);
@@ -1020,7 +1020,7 @@ public sealed class ReportVerifyFixPageTests
         var conEntry = new ReportEntry(
             "app", "App", conTests.Id.ToString(), "x.md", "t", ReportKind.Sesion,
             conTests.StartedUtc, ReportDateSource.Session, conTests.By, "Fix", null, null, null,
-            CreditCalculator.Calculate(conTests, TestRates.Table()).Credits,
+            CostCalculator.Calculate(conTests, TestRates.Table()).Usd,
             CostFormat.BillingUnit, HasSession: true, Session: conTests);
 
         ReportPage page = ReportPage.Compose(conEntry, conTests, conBody);

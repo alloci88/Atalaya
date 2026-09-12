@@ -48,7 +48,7 @@ public sealed class NoPhaseNamesTests
     {
         string footer = string.Join(" · ", CostFormat.UsageSegments(
                 9, 246_541, 18_139, 119_583, 126_904,
-                new CostResult(185.3m), RealCopilotAgent.Id)
+                new CostResult(1.853m), TestProviders.CopilotLens)
             .Select(s => s.Full));
 
         Offenders(footer).Should().BeEmpty();

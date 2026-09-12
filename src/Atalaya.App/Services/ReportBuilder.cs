@@ -75,9 +75,11 @@ public static class ReportBuilder
     /// nuestros tokens cuadran con los suyos, está ahí. Solo aparece cuando llegó.
     /// </para>
     /// </summary>
-    private static void AppendDeclaredCost(StringBuilder sb, AuditSession session)
+    private static void AppendDeclaredCost(StringBuilder sb, AuditSession session, CostResult cost)
     {
-        if (CreditCalculator.IsBilled(session.Provider) || session.Usage.Cost is not { } declared)
+        // Solo de una casa que declara que su consumo no lleva precio nuestro (PROV-2 §3). Donde
+        // sí hay tarifa, el coste calculado ES la respuesta y una segunda cifra sobraría.
+        if (!cost.IsUnpriced || session.Usage.Cost is not { } declared)
         {
             return;
         }
@@ -110,21 +112,42 @@ public static class ReportBuilder
     /// escribirla, el desglose en tokens que ya estaba arriba no permite decidir nada — dos cifras
     /// parecidas pueden costar trece veces distinto.
     /// </summary>
-    private static void AppendCostSplit(StringBuilder sb, CostResult cost)
+    private static void AppendCostSplit(StringBuilder sb, CostResult cost, CostLens lens)
     {
-        string line = CostFormat.CostSplitLine(cost);
+        string line = CostFormat.CostSplitLine(cost, lens);
         if (line.Length > 0)
         {
             // F29 §2 — el anexo registra como la cabecera: el total en las dos unidades, y el
-            // reparto en credits, que es la unidad en la que se comparan los conceptos entre sí.
-            sb.AppendLine($"- **Coste**: {CostFormat.Both(cost.Credits)}");
+            // reparto en la moneda de la casa, que es en la que se comparan los conceptos.
+            sb.AppendLine($"- **Coste**: {CostFormat.Both(cost.Usd, lens)}");
             sb.AppendLine($"- **Reparto del coste**: {line}");
         }
     }
 
-    private static void AppendBudgetLine(StringBuilder sb, AuditSession session)
+    /// <summary>
+    /// Lo que declara la casa que corrió esta sesión (PROV-2 §3). Sin casa delante —un informe
+    /// que se rehace desde el hub— se supone el histórico, que es con lo que se escribió.
+    /// </summary>
+    private static ProviderCostTraits Traits(AuditSession session, IAuditorProvider? provider)
+        => provider?.CostTraits() ?? ProviderCostTraits.Historical(session.Provider);
+
+    /// <summary>
+    /// La lente de lo que se GUARDA: la moneda de esa casa si la tiene, sin mirar la preferencia
+    /// de esta máquina (F29 §2). Un informe se lee dentro de años y en otro puesto.
+    /// <para>
+    /// Sin casa delante —un informe que se rehace desde el hub— se escribe en la moneda de la
+    /// casa de REFERENCIA de esta instalación, que es la de fábrica. Es lo que hacía el informe
+    /// antes de PROV-2, cuando escribía «AI credits» sin preguntarle a nadie: caerse a dólares
+    /// aquí cambiaría la unidad de un informe sin que nadie hubiera cambiado de proveedor.
+    /// </para>
+    /// </summary>
+    private static CostLens Recorded(IAuditorProvider? provider)
+        => CostLens.Recorded(provider?.Billing ?? CostFormat.Billing);
+
+    private static void AppendBudgetLine(
+        StringBuilder sb, AuditSession session, TokenAccounting accounting)
     {
-        PromptBudget budget = PromptBudget.From(session);
+        PromptBudget budget = PromptBudget.From(session, accounting);
         if (budget.Line.Length == 0)
         {
             return;
@@ -196,7 +219,8 @@ public static class ReportBuilder
         int pendingUnits,
         int largeUnits,
         string? organization = null,
-        ModelRateTable? rates = null)
+        ModelRateTable? rates = null,
+        IAuditorProvider? provider = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"# Informe de sesión — {app.Name}");
@@ -215,8 +239,8 @@ public static class ReportBuilder
         sb.AppendLine($"- **Ciclo**: {session.CycleN} · **Temática**: {ThemeCatalog.Display(session.Theme)}"
             + $" · **Modo**: {AuditModes.Describe(session.Mode, session.Exhaustive)}");
 
-        CostResult cost = CreditCalculator.Calculate(session, rates);
-        sb.AppendLine(CostHeadline(session, cost));
+        CostResult cost = CostCalculator.Calculate(session, rates, null, Traits(session, provider));
+        sb.AppendLine(CostHeadline(session, cost, Recorded(provider)));
         sb.AppendLine();
 
         // EL RESUMEN VA PRIMERO, y contesta lo que se pregunta primero (F23 §3). Antes había que
@@ -404,7 +428,7 @@ public static class ReportBuilder
             AppendFindings(sb, session, newFindings);
         }
 
-        AppendAnnex(sb, session, cost, pendingUnits, largeUnits);
+        AppendAnnex(sb, session, cost, pendingUnits, largeUnits, Traits(session, provider), Recorded(provider));
 
         Sign(sb, organization);
         return sb.ToString();
@@ -439,16 +463,16 @@ public static class ReportBuilder
     /// hay importe que repartir y la línea dice lo que hay: la duración.
     /// </para>
     /// </summary>
-    private static string CostHeadline(AuditSession session, CostResult cost)
+    private static string CostHeadline(AuditSession session, CostResult cost, CostLens lens)
     {
         // F29 §2 — las DOS cifras: «185,3 AI credits (1,85 $)». Un informe registra, y lo que se
         // registra no puede depender de una preferencia de la máquina que lo generó.
-        var parts = new List<string> { CostFormat.OfSessionForReport(cost, session.Provider) };
+        var parts = new List<string> { CostFormat.OfSessionForReport(cost, lens) };
 
         int units = session.Units.Count;
-        if (cost.Credits is { } credits && units > 0)
+        if (cost.Usd is { } usd && units > 0)
         {
-            parts.Add(string.Create(Culture, $"{credits / units:0.#} por unidad"));
+            parts.Add(string.Create(Culture, $"{lens.Amount(usd) / units:0.#} por unidad"));
         }
 
         if (Elapsed(session) is { Length: > 0 } elapsed)
@@ -690,7 +714,8 @@ public static class ReportBuilder
     /// </para>
     /// </summary>
     private static void AppendAnnex(
-        StringBuilder sb, AuditSession session, CostResult cost, int pendingUnits, int largeUnits)
+        StringBuilder sb, AuditSession session, CostResult cost, int pendingUnits, int largeUnits,
+        ProviderCostTraits traits, CostLens lens)
     {
         sb.AppendLine("---");
         sb.AppendLine();
@@ -701,9 +726,9 @@ public static class ReportBuilder
         sb.AppendLine();
 
         sb.AppendLine(UsageLine(session));
-        AppendCostSplit(sb, cost);
-        AppendDeclaredCost(sb, session);
-        AppendBudgetLine(sb, session);
+        AppendCostSplit(sb, cost, lens);
+        AppendDeclaredCost(sb, session, cost);
+        AppendBudgetLine(sb, session, traits.Accounting);
         if (session.MaxPassesPerUnit > 0)
         {
             sb.AppendLine($"- **Pasadas del barrido (tope)**: {session.MaxPassesPerUnit} por unidad");
@@ -897,7 +922,8 @@ public static class ReportBuilder
         IReadOnlyList<VerifyLine> lines,
         IReadOnlyList<string> notes,
         string? organization = null,
-        ModelRateTable? rates = null)
+        ModelRateTable? rates = null,
+        IAuditorProvider? provider = null)
     {
         string appName = app?.Name ?? session.AppSlug;
         var sb = new StringBuilder();
@@ -913,9 +939,9 @@ public static class ReportBuilder
         sb.AppendLine($"- **Hallazgos verificados**: {lines.Count}");
         sb.AppendLine(UsageLine(session));
 
-        CostResult cost = CreditCalculator.Calculate(session, rates);
-        sb.AppendLine($"- **Coste**: {CostFormat.OfSessionForReport(cost, session.Provider)}");
-        AppendDeclaredCost(sb, session);
+        CostResult cost = CostCalculator.Calculate(session, rates, null, Traits(session, provider));
+        sb.AppendLine($"- **Coste**: {CostFormat.OfSessionForReport(cost, Recorded(provider))}");
+        AppendDeclaredCost(sb, session, cost);
         sb.AppendLine();
 
         sb.AppendLine("> Verificar **juzga el código que hay ahora**. Que el código anclado haya "
@@ -1046,7 +1072,8 @@ public static class ReportBuilder
         BuildVerdict? build,
         string? organization = null,
         FixTestSituation? tests = null,
-        ModelRateTable? rates = null)
+        ModelRateTable? rates = null,
+        IAuditorProvider? provider = null)
     {
         string appName = app?.Name ?? session.AppSlug;
         string alias = finding.DisplayId ?? finding.Id.ToString();
@@ -1064,9 +1091,9 @@ public static class ReportBuilder
         sb.AppendLine($"- **Modelo**: {session.Model ?? "n/d"}");
         sb.AppendLine(UsageLine(session));
 
-        CostResult fixCost = CreditCalculator.Calculate(session, rates);
-        sb.AppendLine($"- **Coste**: {CostFormat.OfSessionForReport(fixCost, session.Provider)}");
-        AppendDeclaredCost(sb, session);
+        CostResult fixCost = CostCalculator.Calculate(session, rates, null, Traits(session, provider));
+        sb.AppendLine($"- **Coste**: {CostFormat.OfSessionForReport(fixCost, Recorded(provider))}");
+        AppendDeclaredCost(sb, session, fixCost);
         if (session.Interrupted)
         {
             sb.AppendLine("- ⚠ **Sesión detenida por el usuario**: el agente no llegó a cerrar el arreglo.");

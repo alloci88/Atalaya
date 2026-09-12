@@ -363,7 +363,7 @@ public sealed class VerifyCoordinator
         try
         {
             string report = ReportBuilder.BuildVerifyReport(
-                app, session, lines, notes, _hub.OrganizationName, ModelRates());
+                app, session, lines, notes, _hub.OrganizationName, ModelRates(), _agent);
             _hub.Store.WriteReport(slug, session.Id.ToString(), report);
         }
         catch (Exception)
@@ -378,7 +378,7 @@ public sealed class VerifyCoordinator
     {
         try
         {
-            return _hub.Store.TryReadModelRates();
+            return _hub.ModelRates();
         }
         catch (Exception)
         {

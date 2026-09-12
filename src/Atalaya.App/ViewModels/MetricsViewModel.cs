@@ -350,10 +350,25 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
     /// <summary>
     /// La unidad en la que se rotula el eje de la gráfica de coste: la del conmutador de
-    /// Ajustes → Tarifas (F29 §2). La escribe <see cref="CostFormat"/>, que es el único sitio que
-    /// sabe en qué divisa se enseña un coste.
+    /// Ajustes → Tarifas (F29 §2), subordinada al gasto del periodo (PROV-2 §3). La escribe
+    /// <see cref="CostFormat"/>, que es el único sitio que sabe en qué divisa se enseña un coste.
     /// </summary>
     [ObservableProperty] private string _costUnit = CostFormat.Unit;
+
+    /// <summary>
+    /// <b>La lente del periodo</b> (PROV-2 §3): la moneda de la única casa que gastó, o dólares
+    /// cuando gastó más de una. La resuelve la consulta —es quien sabe quién gastó— y el panel
+    /// entero la usa: las cuatro cifras, las dos gráficas de coste y la tabla de actividad. Una
+    /// sola lente por pantalla es lo que impide que el azulejo diga credits y el eje, dólares.
+    /// </summary>
+    [ObservableProperty] private CostLens _costLens = CostLens.Dollars;
+
+    /// <summary>
+    /// <b>Por qué el coste va en dólares aunque esta máquina prefiera otra moneda</b> (PROV-2 §3):
+    /// una línea, y solo cuando en el periodo ha gastado más de un proveedor. Vacía el resto del
+    /// tiempo — un aviso que sale siempre se aprende a no leer.
+    /// </summary>
+    [ObservableProperty] private string _costCurrencyNote = string.Empty;
 
 
     [ObservableProperty] private IReadOnlyList<ChartSeries> _costSeries = Array.Empty<ChartSeries>();
@@ -447,17 +462,17 @@ public sealed partial class MetricsViewModel : ViewModelBase
             var segments = donut.Slices
                 .Select(s => new DonutSegment(
                     s.Label,
-                    (double)s.Credits,
+                    (double)s.Usd,
                     Brush(ActionPalette.Of(s.Action).For(_dark)),
-                    $"{s.Label}: {CostFormat.Number(s.Credits)} {CostFormat.Unit} "
-                    + $"({PercentText.Of((double)(s.Credits / donut.Total))}) · "
+                    $"{s.Label}: {CostFormat.Number(s.Usd, d.CostLens)} {d.CostLens.Symbol} "
+                    + $"({PercentText.Of((double)(s.Usd / donut.Total))}) · "
                     + (s.Sessions == 1 ? "1 sesión" : $"{s.Sessions} sesiones")))
                 .ToList();
 
             ActionCost.Add(new CoverageCard(
                 donut.Slug,
                 donut.Name,
-                $"{CostFormat.Number(donut.Total)} {CostFormat.Unit}",
+                $"{CostFormat.Number(donut.Total, d.CostLens)} {d.CostLens.Symbol}",
                 string.Empty,
                 string.Join(" · ", segments.Select(s => s.Tooltip)),
                 segments,
@@ -645,6 +660,8 @@ public sealed partial class MetricsViewModel : ViewModelBase
         CostPartialNotice = d.CostIsPartial ? d.PartialCostNotice : string.Empty;
         CostScopeNote = d.HasUntariffed ? d.UntariffedNotice : string.Empty;
         CostUnit = d.CostUnit;
+        CostLens = d.CostLens;
+        CostCurrencyNote = d.CostCurrencyNote;
 
         Cards.Clear();
         Cards.Add(CardCoverage(d));
@@ -712,21 +729,21 @@ public sealed partial class MetricsViewModel : ViewModelBase
     {
         string sessions = d.SessionsInPeriod == 1 ? "1 sesión" : $"{N(d.SessionsInPeriod)} sesiones";
         string subtitle = d.CostPerAuditedUnit is { } per
-            ? $"{sessions} · {CostFormat.Number(per)} {CostFormat.Unit} por unidad auditada"
+            ? $"{sessions} · {CostFormat.Number(per, d.CostLens)} {d.CostLens.Symbol} por unidad auditada"
             : $"{sessions} · sin unidades auditadas en el periodo";
 
         return Card(
             "cost",
             "Coste",
-            d.CostInPeriod is { } total ? CostFormat.Number(total) : Unknown,
-            d.CostInPeriod is null ? null : CostFormat.Unit,
+            d.CostInPeriod is { } total ? CostFormat.Number(total, d.CostLens) : Unknown,
+            d.CostInPeriod is null ? null : d.CostLens.Symbol,
             d.CostInPeriod is null ? "Se activará cuando alguna sesión registre coste" : subtitle,
             d.CostTrend,
             d.CostInPeriod is { } c
-                ? $"{CostFormat.Caveat} Equivale a {CostFormat.Equivalent(c)}. "
+                ? $"{CostFormat.CaveatFor(d.CostLens)} Equivale a {CostFormat.Equivalent(c, d.CostLens)}. "
                   + "El «por unidad auditada» divide lo que costó AUDITAR, no todo el gasto: un "
                   + "arreglo o una verificación no auditan ninguna unidad."
-                : CostFormat.Caveat);
+                : CostFormat.CaveatFor(d.CostLens));
     }
 
     /// <summary>
@@ -740,14 +757,14 @@ public sealed partial class MetricsViewModel : ViewModelBase
             ? "sin resueltos en el periodo"
             : $"{N(d.ResolvedInPeriod)} {(d.ResolvedInPeriod == 1 ? "resuelto" : "resueltos")} · "
               + (d.CostPerResolutionBefore is { } before
-                  ? $"{CostFormat.Number(before)} {CostFormat.Unit} el periodo anterior"
+                  ? $"{CostFormat.Number(before, d.CostLens)} {d.CostLens.Symbol} el periodo anterior"
                   : "sin cifra del periodo anterior");
 
         return Card(
             "cost-per-resolution",
             "Coste por hallazgo resuelto",
-            d.CostPerResolution is { } v ? CostFormat.Number(v) : Unknown,
-            d.CostPerResolution is null ? null : CostFormat.Unit,
+            d.CostPerResolution is { } v ? CostFormat.Number(v, d.CostLens) : Unknown,
+            d.CostPerResolution is null ? null : d.CostLens.Symbol,
             subtitle,
             d.CostPerResolutionTrend,
             "El coste del periodo dividido entre los hallazgos que se resolvieron en él. Cuenta "
@@ -1235,14 +1252,14 @@ public sealed partial class MetricsViewModel : ViewModelBase
                 row.Units == 1 ? "1 unidad" : $"{row.Units} unidades",
                 findings,
                 row.Cost is { } c
-                    ? CostFormat.Marked($"{CostFormat.Number(c)} {row.CostUnit}", row.CostIsEstimate)
-                    : row.Billed ? Unknown : CostFormat.SubscriptionCostShort,
+                    ? CostFormat.Marked($"{CostFormat.Number(c, d.CostLens)} {row.CostUnit}", row.CostIsEstimate)
+                    : row.NoRateNote is null ? Unknown : CostFormat.UnpricedShort,
                 File.Exists(ReportPathFor(row.Slug, row.SessionId)),
                 row.Tokens,
                 row.TokensDetail,
                 row.CostIsEstimate
                     ? CostFormat.EstimateTooltip(row.Estimated)
-                    : row.Billed ? CostFormat.Caveat : CostFormat.SubscriptionCost));
+                    : row.NoRateNote ?? CostFormat.CaveatFor(CostLens)));
         }
 
         HasSessions = Sessions.Count > 0;

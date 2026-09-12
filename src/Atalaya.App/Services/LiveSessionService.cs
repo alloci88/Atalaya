@@ -145,6 +145,13 @@ public sealed partial class LiveSessionService : ObservableObject
     [ObservableProperty] private string _costUnit = CostFormat.Unit;
 
     /// <summary>
+    /// En qué unidad se escribe el coste de ESTA sesión (PROV-2 §3): la moneda de la casa que la
+    /// está corriendo, si la tiene y si esta máquina la prefiere. La trae el consumo, que es lo
+    /// que viene de quien la lanzó.
+    /// </summary>
+    [ObservableProperty] private CostLens _costLens = CostFormat.Lens;
+
+    /// <summary>
     /// El coste con su procedencia: el número, o el motivo por el que no lo hay (F16 §B). Es lo
     /// que permite que el pie diga lo MISMO que el informe de esa misma sesión.
     /// </summary>
@@ -610,6 +617,7 @@ public sealed partial class LiveSessionService : ObservableObject
         Provider = null;
         CostResult = CostResult.Unavailable(CostUnavailable.TokensMissing);
         CostUnit = CostFormat.Unit;
+        CostLens = CostFormat.Lens;
 
         // Y el estado de espera, que también es del pie: una sesión nueva no espera a nadie
         // todavía, y el reloj de la espera no puede arrancar heredado.
@@ -1230,11 +1238,12 @@ public sealed partial class LiveSessionService : ObservableObject
         CacheReadTokens = u.CacheReadTokens;
         CacheWriteTokens = u.CacheWriteTokens;
         CostResult = u.Cost;
-        Cost = u.Cost.Credits;
+        Cost = u.Cost.Usd;
         Provider = u.Provider;
         Calls = u.Calls;
         Turns = u.Turns;
-        CostUnit = CostFormat.BillingUnit;
+        CostLens = u.Lens ?? CostFormat.Lens;
+        CostUnit = CostLens.LongSymbol;
         Budget = u.Budget;
         OnPropertyChanged(nameof(CostPerUnit));
     });

@@ -23,19 +23,22 @@ public sealed class CostCurrencyTests : IDisposable
     public void Dispose() => CostFormat.Currency = _previous;
 
     /// <summary>
-    /// La conversión es la de D-786 y vive en un solo sitio con nombre: 1 credit = 0,01 $. Los
-    /// dólares con dos decimales y el símbolo detrás; los credits con uno, como hasta hoy.
+    /// La conversión sigue viviendo en UN solo sitio con nombre —1 credit = 0,01 $— pero desde
+    /// PROV-2 §3 ese sitio es la <c>ProviderBilling</c> de la casa que los usa, no una constante
+    /// del dominio: el día que cambie, cambia donde ella vive. Los dólares con dos decimales y el
+    /// símbolo detrás; los credits con uno, como hasta hoy.
     /// </summary>
     [Fact]
     public void La_misma_cifra_en_las_dos_unidades()
     {
-        CreditCalculator.UsdPerCredit.Should().Be(0.01m, "la conversión está escrita UNA vez");
+        TestProviders.Copilot.Billing.UsdPerUnit.Should()
+            .Be(0.01m, "la equivalencia está escrita UNA vez, y la declara quien la usa");
 
         CostFormat.Currency = CostCurrency.Credits;
-        CostFormat.Of(185.3m).Should().Be("185,3 credits");
+        CostFormat.Of(1.853m).Should().Be("185,3 credits");
 
         CostFormat.Currency = CostCurrency.Usd;
-        CostFormat.Of(185.3m).Should().Be("1,85 $");
+        CostFormat.Of(1.853m).Should().Be("1,85 $");
     }
 
     /// <summary>
@@ -48,7 +51,7 @@ public sealed class CostCurrencyTests : IDisposable
     {
         CostFormat.Currency = CostCurrency.Usd;
 
-        CostFormat.Number(0.4m).Should().Be("< 0,01");
+        CostFormat.Number(0.004m).Should().Be("< 0,01");
         CostFormat.Number(0m).Should().Be("0,00", "cero medido sí es cero");
     }
 
@@ -62,7 +65,7 @@ public sealed class CostCurrencyTests : IDisposable
         foreach (CostCurrency currency in new[] { CostCurrency.Credits, CostCurrency.Usd })
         {
             CostFormat.Currency = currency;
-            CostFormat.Both(185.3m).Should().Be("185,3 AI credits (1,85 $)");
+            CostFormat.Both(1.853m).Should().Be("185,3 AI credits (1,85 $)");
         }
     }
 

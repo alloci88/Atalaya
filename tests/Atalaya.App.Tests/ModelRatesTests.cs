@@ -85,7 +85,7 @@ public sealed class ModelRatesTests : IDisposable
     public void Sembrar_no_pisa_una_tarifa_editada()
     {
         // Un modelo que la siembra SÍ trae, con un precio que alguien corrigió a mano.
-        _rates.Save(new ModelRateTable { Rates = { new ModelRate("gpt-5.4", 99m, 98m, 97m) } });
+        _rates.Save(new ModelRateTable { Rates = { new ModelRate("gpt-5.4", string.Empty, 99m, 98m, 97m) } });
 
         _hub.SeedModelRates();
 
@@ -102,7 +102,7 @@ public sealed class ModelRatesTests : IDisposable
     [Fact]
     public void Sembrar_rellena_los_modelos_que_la_tabla_no_conocia()
     {
-        _rates.Save(new ModelRateTable { Rates = { new ModelRate("mio", 1m, 2m, 0.1m) } });
+        _rates.Save(new ModelRateTable { Rates = { new ModelRate("mio", string.Empty, 1m, 2m, 0.1m) } });
 
         _hub.SeedModelRates();
 
@@ -135,7 +135,7 @@ public sealed class ModelRatesTests : IDisposable
     [Fact]
     public void Los_modelos_usados_sin_tarifa_se_señalan_con_su_recuento()
     {
-        _rates.Save(new ModelRateTable { Rates = { new ModelRate("conocido", 1m, 2m, 0.1m) } });
+        _rates.Save(new ModelRateTable { Rates = { new ModelRate("conocido", string.Empty, 1m, 2m, 0.1m) } });
         WriteSession("conocido");
         WriteSession("recien-salido");
         WriteSession("recien-salido");
@@ -156,7 +156,7 @@ public sealed class ModelRatesTests : IDisposable
     [Fact]
     public void Los_modelos_de_una_casa_que_no_factura_no_estan_esperando_tarifa()
     {
-        _rates.Save(new ModelRateTable { Rates = { new ModelRate("conocido", 1m, 2m, 0.1m) } });
+        _rates.Save(new ModelRateTable { Rates = { new ModelRate("conocido", string.Empty, 1m, 2m, 0.1m) } });
         WriteSession("claude-opus-5", provider: "claude-code");
         WriteSession("recien-salido");
 
@@ -233,7 +233,10 @@ public sealed class ModelRatesTests : IDisposable
     {
         var vm = new ModelRatesViewModel(_rates);
         vm.Rows.Clear();
-        vm.Rows.Add(new RateRow { Model = "nuevo", Input = 1m, Output = 5m, CachedInput = 0.1m });
+        vm.Rows.Add(new RateRow
+        {
+            Model = "nuevo", Provider = "copilot", Input = 1m, Output = 5m, CachedInput = 0.1m,
+        });
 
         vm.SaveCommand.Execute(null);
 
@@ -251,24 +254,31 @@ public sealed class ModelRatesTests : IDisposable
     {
         var vm = new ModelRatesViewModel(_rates);
         vm.Rows.Clear();
-        vm.Rows.Add(new RateRow { Model = "sin-escritura", Input = 1m, Output = 5m, CacheWrite = string.Empty });
-        vm.Rows.Add(new RateRow { Model = "con-escritura", Input = 1m, Output = 5m, CacheWrite = "0" });
+        vm.Rows.Add(new RateRow
+        {
+            Model = "sin-escritura", Provider = "copilot", Input = 1m, Output = 5m,
+            CacheWrite = string.Empty,
+        });
+        vm.Rows.Add(new RateRow
+        {
+            Model = "con-escritura", Provider = "copilot", Input = 1m, Output = 5m, CacheWrite = "0",
+        });
 
         vm.SaveCommand.Execute(null);
 
-        _rates.Current!.Find("sin-escritura", null)!.CacheWritePerMillion.Should().BeNull();
-        _rates.Current!.Find("con-escritura", null)!.CacheWritePerMillion.Should().Be(0m);
+        _rates.Current!.Find("sin-escritura", "copilot")!.CacheWritePerMillion.Should().BeNull();
+        _rates.Current!.Find("con-escritura", "copilot")!.CacheWritePerMillion.Should().Be(0m);
     }
 
     /// <summary>Una tarifa negativa se rechaza ENTERA: no se guarda media tabla.</summary>
     [Fact]
     public void Una_tarifa_negativa_se_rechaza_y_no_se_guarda_nada()
     {
-        _rates.Save(new ModelRateTable { Rates = { new ModelRate("previo", 1m, 2m, 0.1m) } });
+        _rates.Save(new ModelRateTable { Rates = { new ModelRate("previo", string.Empty, 1m, 2m, 0.1m) } });
 
         var vm = new ModelRatesViewModel(_rates);
         vm.Rows.Clear();
-        vm.Rows.Add(new RateRow { Model = "malo", Input = -1m, Output = 5m });
+        vm.Rows.Add(new RateRow { Model = "malo", Provider = "copilot", Input = -1m, Output = 5m });
 
         vm.SaveCommand.Execute(null);
 
@@ -282,8 +292,8 @@ public sealed class ModelRatesTests : IDisposable
     {
         var vm = new ModelRatesViewModel(_rates);
         vm.Rows.Clear();
-        vm.Rows.Add(new RateRow { Model = "dup", Input = 1m, Output = 2m });
-        vm.Rows.Add(new RateRow { Model = "dup", Input = 3m, Output = 4m });
+        vm.Rows.Add(new RateRow { Model = "dup", Provider = "copilot", Input = 1m, Output = 2m });
+        vm.Rows.Add(new RateRow { Model = "dup", Provider = "copilot", Input = 3m, Output = 4m });
 
         vm.SaveCommand.Execute(null);
 
@@ -300,7 +310,10 @@ public sealed class ModelRatesTests : IDisposable
     {
         var vm = new ModelRatesViewModel(_rates);
         vm.Rows.Clear();
-        vm.Rows.Add(new RateRow { Model = "claude-sonnet-5", Input = 2m, Output = 10m, CacheWrite = "2,5" });
+        vm.Rows.Add(new RateRow
+        {
+            Model = "claude-sonnet-5", Provider = "copilot", Input = 2m, Output = 10m, CacheWrite = "2,5",
+        });
         vm.Rows.Add(new RateRow { Model = "claude-sonnet-5", Provider = "otra-reventa", Input = 2m, Output = 10m, CacheWrite = "4" });
 
         vm.SaveCommand.Execute(null);
@@ -311,14 +324,20 @@ public sealed class ModelRatesTests : IDisposable
     }
 
     /// <summary>
-    /// <b>Y una tarifa para una casa que no factura se RECHAZA</b> (F16-RETOQUE §1). Esta tabla es
-    /// la de lo que le llega a la organización en una factura; una tarifa de Claude Code no
-    /// gobernaría nada —el cálculo para esa casa en la puerta— y lo único que conseguiría es que
-    /// alguien la mantuviera para siempre creyendo que sirve. Se dice cuál es y no se guarda nada.
+    /// <b>Y una tarifa SIN PROVEEDOR se rechaza entera</b> (PROV-2 §3). Aquí se rechazaba la de
+    /// una casa que no facturaba; ahora la de cualquier casa es legítima, y lo que no se puede es
+    /// dejarla sin dueño: el coste se tarifa por proveedor + modelo, así que una tarifa sin
+    /// proveedor no dice a quién le cobra. Se dice cuál es y no se guarda nada.
+    /// <para>
+    /// Lo que se rompería en silencio sin esto: una fila en blanco se guardaría como genérica y le
+    /// pondría precio al consumo de TODAS las casas, incluida la que declara que no lleva ninguno.
+    /// </para>
     /// </summary>
     [Fact]
-    public void Una_tarifa_de_una_casa_que_no_factura_se_rechaza_entera()
+    public void Una_tarifa_sin_proveedor_se_rechaza_entera()
     {
+        _rates.Save(new ModelRateTable { Rates = { new ModelRate("previo", "copilot", 1m, 2m, 0.1m) } });
+
         var vm = new ModelRatesViewModel(_rates);
         vm.Rows.Clear();
         vm.Rows.Add(new RateRow { Model = "gpt-5.4", Input = 2.5m, Output = 15m });
@@ -327,9 +346,10 @@ public sealed class ModelRatesTests : IDisposable
         vm.SaveCommand.Execute(null);
 
         vm.Saved.Should().BeFalse();
-        vm.Status.Should().Contain("claude-opus-5").And.Contain("no factura");
+        vm.Status.Should().Contain("gpt-5.4").And.Contain("falta el proveedor");
         vm.Status.Should().Contain("No se ha guardado nada",
             "media tabla guardada es peor que ninguna: nadie sabría qué quedó dentro");
+        _rates.Current!.Rates.Should().ContainSingle().Which.Model.Should().Be("previo");
     }
 
     /// <summary>
@@ -339,26 +359,30 @@ public sealed class ModelRatesTests : IDisposable
     /// la primera vez que alguien guarda.
     /// </summary>
     [Fact]
-    public void Las_tarifas_heredadas_de_una_casa_que_no_factura_ni_se_ensenan_ni_sobreviven()
+    public void La_tarifa_de_cualquier_casa_se_ensena_y_sobrevive_al_guardado()
     {
         var legacy = new ModelRateTable
         {
             Rates =
             {
-                new ModelRate("gpt-5.4", 2.5m, 15m, 0.25m),
-                new ModelRate("claude-opus-5", 5m, 25m, 0.5m, 10m, Provider: "claude-code"),
+                new ModelRate("gpt-5.4", "copilot", 2.5m, 15m, 0.25m),
+                new ModelRate("claude-opus-5", "claude-code", 5m, 25m, 0.5m, CacheWritePerMillion: 10m),
             },
         };
         _rates.Save(legacy);
 
         var vm = new ModelRatesViewModel(_rates);
 
-        vm.Rows.Should().ContainSingle().Which.Model.Should().Be("gpt-5.4");
+        // PROV-2 §3 — LA PUERTA QUE SE ABRE. Aquí se escondía la tarifa de la casa que no
+        // facturaba y desaparecía al primer guardado: con el coste tarifado por proveedor +
+        // modelo, esa tarifa gobierna lo suyo y borrarla sería perder lo que alguien escribió.
+        vm.Rows.Should().HaveCount(2);
 
         vm.SaveCommand.Execute(null);
 
         vm.Saved.Should().BeTrue();
-        _rates.Current!.Rates.Should().OnlyContain(r => CreditCalculator.IsBilled(r.Provider));
+        _rates.Current!.Rates.Select(r => r.Provider).Should()
+            .BeEquivalentTo(new[] { "copilot", "claude-code" });
     }
 
     [Fact]

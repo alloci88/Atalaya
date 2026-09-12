@@ -74,7 +74,7 @@ public sealed class FreshInstallRatesTests : IDisposable
         CostResult cost = _rates.CostOf(Session(ModeloSembrado));
 
         cost.Why.Should().Be(CostUnavailable.None, "la tarifa de ese modelo estaba publicada");
-        cost.Credits.Should().NotBeNull().And.NotBe(0m);
+        cost.Usd.Should().NotBeNull().And.NotBe(0m);
     }
 
     /// <summary>
@@ -97,7 +97,7 @@ public sealed class FreshInstallRatesTests : IDisposable
     {
         _rates.Save(new ModelRateTable
         {
-            Rates = { new ModelRate(ModeloSembrado, 1m, 1m, 1m, 1m, Provider: null) },
+            Rates = { new ModelRate(ModeloSembrado, string.Empty, 1m, 1m, 1m, CacheWritePerMillion: 1m) },
         });
 
         _hub.SeedModelRates();

@@ -22,11 +22,11 @@ public class CostSplitTests
     private static ModelRateTable Opus() => new()
     {
         Source = "Tarifas de Opus usadas en la aceptación de F19.",
-        Rates = { new ModelRate("opus", 5.00m, 25.00m, 0.50m, CacheWritePerMillion: 6.25m) },
+        Rates = { new ModelRate("opus", string.Empty, 5.00m, 25.00m, 0.50m, CacheWritePerMillion: 6.25m) },
     };
 
     private static CostResult Cost(long input, long output, long read, long write)
-        => CreditCalculator.Calculate("opus", "copilot", input, output, read, write, Opus());
+        => CostCalculator.Calculate("opus", "copilot", input, output, read, write, Opus());
 
     /// <summary>
     /// <b>El caso que ordenó la fase</b>, con los números reales de la aceptación de F19. La
@@ -40,16 +40,17 @@ public class CostSplitTests
 
         CostSplit split = cost.Split!;
 
-        split.CacheWrite.Should().BeApproximately(79.3m, 0.1m);
-        split.Output.Should().BeApproximately(45.3m, 0.1m);
-        split.Cached.Should().BeApproximately(6.0m, 0.1m);
-        split.Fresh.Should().BeApproximately(0.03m, 0.05m, "casi todo lo de entrada vino de caché");
+        // Los mismos números de la aceptación, en dólares: 79,3 credits son 0,793 $.
+        split.CacheWrite.Should().BeApproximately(0.793m, 0.001m);
+        split.Output.Should().BeApproximately(0.453m, 0.001m);
+        split.Cached.Should().BeApproximately(0.060m, 0.001m);
+        split.Fresh.Should().BeApproximately(0.0003m, 0.0005m, "casi todo lo de entrada vino de caché");
 
         split.ShareOf(split.CacheWrite).Should().BeApproximately(0.60, 0.02);
         split.ShareOf(split.Output).Should().BeApproximately(0.35, 0.02);
         split.ShareOf(split.Cached).Should().BeApproximately(0.05, 0.02);
 
-        cost.Credits.Should().BeApproximately(130.7m, 0.5m, "el total de la aceptación, al credit");
+        cost.Usd.Should().BeApproximately(1.307m, 0.005m, "el total de la aceptación, al céntimo");
     }
 
     /// <summary>
@@ -66,7 +67,7 @@ public class CostSplitTests
     {
         CostResult cost = Cost(input, output, read, write);
 
-        cost.Split!.Total.Should().Be(cost.Credits!.Value);
+        cost.Split!.Total.Should().Be(cost.Usd!.Value);
     }
 
     /// <summary>
@@ -91,15 +92,20 @@ public class CostSplitTests
     }
 
     /// <summary>
-    /// Sin coste no hay reparto. Una casa que no factura, un modelo sin tarifa o una sesión sin
-    /// tokens no producen un desglose de ceros: no producen desglose.
+    /// Sin coste no hay reparto. Un modelo sin tarifa para su casa o una sesión sin tokens no
+    /// producen un desglose de ceros: no producen desglose.
     /// </summary>
     [Fact]
     public void Sin_coste_no_hay_reparto()
     {
-        CreditCalculator.Calculate("opus", "claude-code", 1000, 100, 0, 0, Opus()).Split.Should().BeNull();
-        CreditCalculator.Calculate("desconocido", "copilot", 1000, 100, 0, 0, Opus()).Split.Should().BeNull();
-        CreditCalculator.Calculate("opus", "copilot", 0, 0, 0, 0, Opus()).Split.Should().BeNull();
+        var deCopilot = new ModelRateTable
+        {
+            Rates = { new ModelRate("opus", "copilot", 5.00m, 25.00m, 0.50m, CacheWritePerMillion: 6.25m) },
+        };
+
+        CostCalculator.Calculate("opus", "otra-casa", 1000, 100, 0, 0, deCopilot).Split.Should().BeNull();
+        CostCalculator.Calculate("desconocido", "copilot", 1000, 100, 0, 0, Opus()).Split.Should().BeNull();
+        CostCalculator.Calculate("opus", "copilot", 0, 0, 0, 0, Opus()).Split.Should().BeNull();
     }
 
     /// <summary>
@@ -111,10 +117,10 @@ public class CostSplitTests
     {
         var sinEscritura = new ModelRateTable
         {
-            Rates = { new ModelRate("llano", 5.00m, 25.00m, 0.50m) },
+            Rates = { new ModelRate("llano", string.Empty, 5.00m, 25.00m, 0.50m) },
         };
 
-        CostSplit split = CreditCalculator
+        CostSplit split = CostCalculator
             .Calculate("llano", "copilot", 100_000, 1_000, 20_000, 30_000, sinEscritura).Split!;
 
         split.CacheWrite.Should().Be(0m);

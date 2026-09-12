@@ -649,7 +649,7 @@ public sealed class InventoryViewTests : IDisposable
         AuditLaunchConfirmation asked = _confirmer.Asked.Should().ContainSingle().Subject;
         asked.Estimate.Units.Should().Be(6);
         asked.Estimate.MaxPasses.Should().Be(5, "el tope vigente de los ajustes");
-        asked.Estimate.Total.Should().Be(60m);
+        asked.Estimate.Total.Should().Be(TestRates.UsdPerCredit * 60m);
         asked.Breakdown.Should().Contain("6 unidades × ~10,0/unidad");
         asked.PassesLine.Should().Contain("5 pasadas");
     }
@@ -931,7 +931,7 @@ public sealed class InventoryViewTests : IDisposable
             session.UsageBreakdown.Add(new UnitUsageBreakdown
             {
                 Unit = $"h{i}.cs",
-                OutputTokens = TestRates.OutputFor(perUnitCosts[i]),
+                OutputTokens = TestRates.OutputForCredits(perUnitCosts[i]),
             });
         }
 

@@ -92,15 +92,23 @@ internal static class TestFactory
     /// mitad —la identidad de commit de D-037 sale del perfil, así que sin cuenta no hay perfil que
     /// mirar—; sin ella se monta una desconectada, que es como arranca todo test.
     /// </param>
+    /// <param name="providers">
+    /// Quiénes pueden auditar, para lo que el coste necesita saber de cada casa (PROV-2 §3). Por
+    /// defecto <b>las dos de verdad</b>, que es lo que monta la aplicación: sin ellas el hub no
+    /// sabría de quién son sus tarifas ni qué declara la casa que escribió cada sesión, y los
+    /// tests medirían un comportamiento que en producción no existe.
+    /// </param>
     public static HubContext Hub(
         AppPaths paths,
         SettingsService settings,
         DeployConfig? deploy = null,
-        GitHubAccountService? account = null)
+        GitHubAccountService? account = null,
+        AuditorProviderRegistry? providers = null)
     {
         AssertIsolated(paths);
         return new HubContext(
-            paths, settings, account ?? Account(paths), deploy ?? new DeployConfig(), NullLoggerFactory.Instance);
+            paths, settings, account ?? Account(paths), deploy ?? new DeployConfig(),
+            NullLoggerFactory.Instance, providers ?? TestProviders.Registry());
     }
 
     /// <inheritdoc cref="CloneLinkService"/>

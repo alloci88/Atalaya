@@ -201,15 +201,18 @@ public sealed partial class ReconcileCostsViewModel : ObservableObject
         {
             Groups.Add(new ReconcileGroupRow(group)
             {
+                // PROV-2 §3 — la tarifa se busca con el proveedor de la casa que escribió esas
+                // sesiones, no «con cualquiera»: desde que la columna es obligatoria, una tarifa
+                // de otra casa no cierra este hueco.
                 RateAdded = group.Reason == CostGapReason.SinTarifa
-                    && table?.Find(group.Model, null) is not null,
+                    && table?.Find(group.Model, ProviderOf(group)) is not null,
             });
         }
 
         RatedModels.Clear();
         if (table is not null)
         {
-            foreach (string model in ModelRatesService.Billable(table)
+            foreach (string model in table.Rates
                          .Select(r => r.Model)
                          .Distinct(StringComparer.OrdinalIgnoreCase)
                          .OrderBy(m => m, StringComparer.OrdinalIgnoreCase))
@@ -267,7 +270,7 @@ public sealed partial class ReconcileCostsViewModel : ObservableObject
             Changed |= done.Sessions > 0;
             Status = done.Sessions == 0
                 ? "No se ha reconciliado ninguna sesión."
-                : $"{Sesiones(done.Sessions)} · {CostFormat.Of(done.Credits)}";
+                : $"{Sesiones(done.Sessions)} · {CostFormat.Of(done.Usd)}";
         }
         catch (Exception ex)
         {
@@ -283,4 +286,14 @@ public sealed partial class ReconcileCostsViewModel : ObservableObject
     /// <summary>«1 sesión reconciliada» / «3 sesiones reconciliadas». Singular y plural, una vez.</summary>
     private static string Sesiones(int n)
         => n == 1 ? "1 sesión reconciliada" : $"{n} sesiones reconciliadas";
+
+    /// <summary>
+    /// Con qué proveedor se busca la tarifa de ese grupo: el que declare la casa que escribió sus
+    /// sesiones (PROV-2 §3). Todas las de un grupo comparten motivo y modelo, y con la columna de
+    /// proveedor obligatoria una tarifa de OTRA casa ya no cierra este hueco.
+    /// </summary>
+    private string? ProviderOf(CostGapGroup group)
+        => group.Sessions.Count == 0
+            ? null
+            : _rates.TraitsOf(group.Sessions[0].Provider).ProviderId ?? group.Sessions[0].Provider;
 }

@@ -29,14 +29,20 @@ namespace Atalaya.App.Tests;
 /// </summary>
 public sealed class SessionFooterLayoutTests
 {
-    private static readonly CostResult Subscription = CostResult.Unavailable(CostUnavailable.NotBilled);
+    /// <summary>
+    /// Un consumo sin tarifa cuya casa declara qué se lee en su lugar (PROV-2 §3). Lo que mide
+    /// esta clase es cuánto ocupa esa frase en el pie, y eso no ha cambiado.
+    /// </summary>
+    private static readonly CostResult Subscription = CostResult.Unavailable(
+        CostUnavailable.RateMissing, "opus", TestProviders.ClaudeNote);
 
     /// <summary>Los números del parte: 20 llamadas, 28.050 / 15.670, caché 235.327 / 51.077.</summary>
     private static IReadOnlyList<FooterSegment> Claude()
-        => CostFormat.UsageSegments(20, 28050, 15670, 235327, 51077, Subscription, ClaudeCodeProvider.Id);
+        => CostFormat.UsageSegments(20, 28050, 15670, 235327, 51077, Subscription);
 
     private static IReadOnlyList<FooterSegment> Copilot()
-        => CostFormat.UsageSegments(20, 28050, 15670, 0, 0, new CostResult(68.2m), RealCopilotAgent.Id);
+        => CostFormat.UsageSegments(
+            20, 28050, 15670, 0, 0, new CostResult(0.682m), TestProviders.CopilotLens);
 
     private static int Count(string text, string needle)
     {

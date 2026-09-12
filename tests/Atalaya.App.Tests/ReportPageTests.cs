@@ -61,7 +61,7 @@ public sealed class ReportPageTests
         MaxPassesPerUnit = 6,
         StartedUtc = Start,
         EndedUtc = Start.AddSeconds(153),
-        Usage = new UsageTotals { InputTokens = 1000, OutputTokens = TestRates.OutputFor(58m), Calls = 9 },
+        Usage = new UsageTotals { InputTokens = 1000, OutputTokens = TestRates.OutputForCredits(58m), Calls = 9 },
         Counters = new SessionCounters { New = 3, Confirmed = 1, Resolved = 0 },
         Units =
         {
@@ -125,7 +125,7 @@ public sealed class ReportPageTests
             "app", "App", session.Id.ToString(), "no-existe.md", "Informe de sesión — App",
             ReportKind.Sesion, session.StartedUtc, ReportDateSource.Session, session.By, "Lotes",
             session.Units.Count, session.Counters.New, session.Counters.Resolved,
-            CreditCalculator.Calculate(session, TestRates.Table()).Credits,
+            CostCalculator.Calculate(session, TestRates.Table()).Usd,
             CostFormat.BillingUnit, HasSession: true, Session: session);
 
         return (entry, session, body);
@@ -186,7 +186,7 @@ public sealed class ReportPageTests
 
         ReportStat cost = page.Stats.Single(s => s.Key == "cost");
         cost.Value.Should().Be("58,0");
-        body.Should().Contain("58,0 AI credits", "el coste sale del mismo CreditCalculator y del mismo CostFormat");
+        body.Should().Contain("58,0 AI credits", "el coste sale del mismo CostCalculator y del mismo CostFormat");
         cost.Subtitle.Should().Be("29 por unidad");
         body.Should().Contain("29 por unidad");
 
@@ -248,7 +248,7 @@ public sealed class ReportPageTests
         var entry = new ReportEntry(
             "app", "App", session.Id.ToString(), "no-existe.md", "t", ReportKind.Sesion,
             session.StartedUtc, ReportDateSource.Session, session.By, "Lotes", 1, 1, 0,
-            CreditCalculator.Calculate(session, TestRates.Table()).Credits,
+            CostCalculator.Calculate(session, TestRates.Table()).Usd,
             CostFormat.BillingUnit, HasSession: true, Session: session);
 
         ReportPage page = ReportPage.Compose(entry, session, body);

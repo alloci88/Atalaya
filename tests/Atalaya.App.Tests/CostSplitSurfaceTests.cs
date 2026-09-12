@@ -25,7 +25,7 @@ public sealed class CostSplitSurfaceTests
     /// <summary>Las tarifas de Opus con las que se reprodujo la aceptación de F19.</summary>
     private static ModelRateTable Opus() => new()
     {
-        Rates = { new ModelRate("opus", 5.00m, 25.00m, 0.50m, CacheWritePerMillion: 6.25m) },
+        Rates = { new ModelRate("opus", string.Empty, 5.00m, 25.00m, 0.50m, CacheWritePerMillion: 6.25m) },
     };
 
     private static AppConfig App() => new()
@@ -90,14 +90,20 @@ public sealed class CostSplitSurfaceTests
     }
 
     /// <summary>
-    /// Una casa que no factura no tiene reparto que enseñar: no le falta una tarifa, es que no hay
-    /// factura. Un desglose de ceros ahí pediría configurar algo que no debe existir.
+    /// Una casa sin tarifa no tiene reparto que enseñar: no le falta una, es que no lleva. Un
+    /// desglose de ceros ahí pediría configurar algo que su casa dice que no debe existir.
     /// </summary>
     [Fact]
     public void Sin_factura_el_informe_no_reparte_nada()
     {
+        // La tarifa es de la casa de fábrica, con su proveedor escrito: así no le pone precio al
+        // consumo de otra (PROV-2 §3). Y la otra casa entra con lo que declara.
+        ModelRateTable deCopilot = Opus();
+        deCopilot.AdoptProvider(RealCopilotAgent.Id);
+
         string report = ReportBuilder.BuildSessionReport(
-            App(), Session(ClaudeCodeProvider.Id), Array.Empty<Finding>(), 0, 0, "Org", Opus());
+            App(), Session(ClaudeCodeProvider.Id), Array.Empty<Finding>(), 0, 0, "Org",
+            deCopilot, TestProviders.Claude);
 
         report.Should().NotContain("Reparto del coste");
     }
@@ -109,10 +115,10 @@ public sealed class CostSplitSurfaceTests
     [Fact]
     public void El_pie_en_vivo_lleva_el_reparto_y_cede_antes_que_el_coste()
     {
-        CostResult cost = CreditCalculator.Calculate(Session(), Opus());
+        CostResult cost = CostCalculator.Calculate(Session(), Opus());
 
         IReadOnlyList<FooterSegment> segments = CostFormat.UsageSegments(
-            9, 246_541, 18_139, 119_583, 126_904, cost, RealCopilotAgent.Id);
+            9, 246_541, 18_139, 119_583, 126_904, cost, TestProviders.CopilotLens);
 
         // F23 §6 — el pie en vivo se rige por el criterio del cuerpo: el reparto es diagnóstico y
         // pasa al TOOLTIP. Sigue estando entero y a un gesto de distancia; lo que ya no hace es
@@ -129,6 +135,7 @@ public sealed class CostSplitSurfaceTests
     public void Sin_coste_el_pie_no_reparte()
         => CostFormat.UsageSegments(
                 9, 1000, 100, 0, 0,
-                CostResult.Unavailable(CostUnavailable.NotBilled), ClaudeCodeProvider.Id)
+                CostResult.Unavailable(
+                    CostUnavailable.RateMissing, "opus", TestProviders.ClaudeNote))
             .Should().NotContain(s => s.Full.Contains("escritura de caché", StringComparison.Ordinal));
 }

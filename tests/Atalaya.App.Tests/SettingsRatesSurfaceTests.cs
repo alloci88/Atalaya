@@ -137,8 +137,12 @@ public sealed class SettingsRatesSurfaceTests
             "y dice dónde se cierran");
         xaml.Should().NotContain("Notice.Warning}\"\n                                Margin=\"{StaticResource Pad.M.Bottom}\"",
             "y ya no es un bloque ámbar");
-        xaml.Should().Contain("Tarifas de GitHub Copilot",
-            "la tabla es la de Copilot y se titula por lo que es");
+        // PROV-2 §3 — el título ya no nombra una casa: con la columna de proveedor por fila, la
+        // tabla es de la organización y puede tener tarifas de más de una.
+        xaml.Should().Contain("Tarifas por modelo", "la tabla se titula por lo que es");
+        xaml.Should().NotContain("Tarifas de GitHub Copilot",
+            "con proveedor por fila, titularla con el nombre de una casa sería falso");
+        xaml.Should().Contain("Proveedor", "y la columna de proveedor está, delante del modelo");
         xaml.Should().Contain("la tabla pública de GitHub Copilot",
             "de dónde salen los precios, dicho donde se corrigen");
         // R8 recorta la frase —de tres oraciones a dos— pero la regla es la misma: la pantalla

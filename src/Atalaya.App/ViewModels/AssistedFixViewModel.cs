@@ -291,7 +291,7 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
     /// <summary>Mismo criterio que el pie de la auditoría y que el informe (F16 §B).</summary>
     public string CostText => CostFormat.SessionFooter(
         _fix.Calls, _fix.InputTokens, _fix.OutputTokens,
-        _fix.CacheReadTokens, _fix.CacheWriteTokens, _fix.CostResult, _fix.Provider);
+        _fix.CacheReadTokens, _fix.CacheWriteTokens, _fix.CostResult, _fix.CostLens);
 
     public string TouchedText => $"ficheros tocados: {Files.Count}";
 
@@ -311,7 +311,7 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
             };
             segments.AddRange(CostFormat.UsageSegments(
                 _fix.Calls, _fix.InputTokens, _fix.OutputTokens,
-                _fix.CacheReadTokens, _fix.CacheWriteTokens, _fix.CostResult, _fix.Provider));
+                _fix.CacheReadTokens, _fix.CacheWriteTokens, _fix.CostResult, _fix.CostLens));
             segments.Add(FooterSegment.Of(TouchedText, priority: 3, opacity: 0.8));
             segments.Add(FooterSegment.Of(BuildText, opacity: 0.8));
             return segments;

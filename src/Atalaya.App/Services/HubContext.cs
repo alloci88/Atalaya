@@ -71,17 +71,30 @@ public sealed class HubContext
     private readonly ILoggerFactory _loggerFactory;
     private string? _builtWithCredential;
 
+    /// <param name="providers">
+    /// El registro de proveedores, para lo que el coste necesita saber de cada casa (PROV-2 §3):
+    /// con qué identificador se busca su tarifa, cómo cuenta sus tokens y qué se lee cuando no
+    /// lleva precio. Entra por aquí —y no por cada consulta— porque todas las que ponen precio a
+    /// una sesión ya reciben este hub, y porque así hay UN sitio donde se contesta.
+    /// <para>
+    /// Admite null: es lo que montan los tests que no van de proveedores. Sin registro se supone
+    /// el histórico —lo que había cuando solo existía una casa— y las tarifas se quedan genéricas,
+    /// que es exactamente como estaban escritas antes de PROV-2.
+    /// </para>
+    /// </param>
     public HubContext(
         AppPaths paths,
         SettingsService settings,
         GitHubAccountService account,
         DeployConfig deploy,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        AuditorProviderRegistry? providers = null)
     {
         _settings = settings;
         _account = account;
         _deploy = deploy;
         _loggerFactory = loggerFactory;
+        Providers = providers;
         HubPaths = new HubPaths(paths.Hub);
         Store = new HubStore(HubPaths, loggerFactory.CreateLogger<HubStore>());
     }
@@ -89,6 +102,53 @@ public sealed class HubContext
     public HubPaths HubPaths { get; }
 
     public HubStore Store { get; }
+
+    /// <summary>Quiénes pueden auditar, o null en un montaje que no va de proveedores.</summary>
+    public AuditorProviderRegistry? Providers { get; }
+
+    /// <summary>
+    /// <b>De quién son las tarifas que esta aplicación siembra</b> (PROV-2 §3): de la casa de
+    /// fábrica, que es la que le factura a la organización. Vacío sin registro, y entonces la
+    /// tarifa se queda genérica — que es como estaban escritas todas hasta PROV-2.
+    /// </summary>
+    public string FactoryProviderId => Providers?.Fallback.ProviderId ?? string.Empty;
+
+    /// <summary>
+    /// De dónde salen los rasgos de coste de la casa que escribió una sesión (PROV-2 §3). Es lo
+    /// que viaja dentro de <see cref="CostLookup"/> hasta el cálculo.
+    /// </summary>
+    public Func<string?, ProviderCostTraits> CostTraits
+        => Providers is { } registry ? registry.CostTraitsOf : ProviderCostTraits.Default;
+
+    /// <summary>
+    /// <b>La tabla de tarifas del hub, lista para usar</b> — y el ÚNICO sitio por el que se lee
+    /// (PROV-2 §3).
+    /// <para>
+    /// Lo que hace de más que <c>Store.TryReadModelRates</c> es la <b>migración de la columna de
+    /// proveedor</b>: las tarifas que se sembraron antes de que esa columna existiera son la lista
+    /// de precios de la casa de fábrica, y se adoptan aquí, en memoria, al leerlas. Tenía que ser
+    /// un solo sitio: con seis lectores repartidos, al primero que se olvidara de adoptar le
+    /// dejarían de casar las tarifas y su pantalla cambiaría de cifra sin que nadie hubiera
+    /// cambiado de gasto.
+    /// </para>
+    /// <para>
+    /// Un fichero corrupto o a medio escribir por un merge devuelve null y no tumba nada: sin
+    /// tabla, los costes salen como «tarifa no configurada», que es honesto.
+    /// </para>
+    /// </summary>
+    public ModelRateTable? ModelRates()
+    {
+        try
+        {
+            ModelRateTable? table = Store.TryReadModelRates();
+            table?.AdoptProvider(FactoryProviderId);
+            return table;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     /// El nombre de la organización del hub, o null si el hub todavía no lo dice (F6.4). Vive

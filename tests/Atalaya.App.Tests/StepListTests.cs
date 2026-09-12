@@ -217,7 +217,7 @@ public sealed class StepListTests : IDisposable
 
         // Y el diálogo puede decir CUÁNTO cerró, que es la pregunta por la que se abrió.
         outcome.Sessions.Should().Be(1);
-        outcome.Credits.Should().NotBeNull();
+        outcome.Usd.Should().NotBeNull();
     }
 
     // ============================================================ Andamiaje

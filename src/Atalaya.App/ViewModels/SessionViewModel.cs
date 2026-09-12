@@ -121,7 +121,7 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
     /// </summary>
     public string CostText => CostFormat.SessionFooter(
         _live.Calls, _live.InputTokens, _live.OutputTokens,
-        _live.CacheReadTokens, _live.CacheWriteTokens, _live.CostResult, _live.Provider);
+        _live.CacheReadTokens, _live.CacheWriteTokens, _live.CostResult, _live.CostLens);
 
     /// <summary>
     /// <b>La media por unidad, en la divisa activa</b> (F30 §2c). Se escribía con
@@ -130,7 +130,7 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
     /// el segmento de al lado; el argumento entero está en F29 §2.
     /// </summary>
     public string PerUnitText => _live.CostPerUnit is { } c
-        ? $"media {CostFormat.Of(c)}/unidad"
+        ? $"media {CostFormat.Of(c, _live.CostLens)}/unidad"
         : string.Empty;
 
     /// <summary>
@@ -210,7 +210,7 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
 
             segments.AddRange(CostFormat.UsageSegments(
                 _live.Calls, _live.InputTokens, _live.OutputTokens,
-                _live.CacheReadTokens, _live.CacheWriteTokens, _live.CostResult, _live.Provider,
+                _live.CacheReadTokens, _live.CacheWriteTokens, _live.CostResult, _live.CostLens,
                 _live.Budget, _live.Turns));
             if (PerUnitText.Length > 0)
             {
