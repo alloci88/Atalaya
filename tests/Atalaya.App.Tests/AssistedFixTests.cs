@@ -55,6 +55,12 @@ public sealed class AssistedFixTests : IDisposable
     private readonly string _clone;
     private readonly AppPaths _paths;
     private readonly SettingsService _settings;
+
+    /// <summary>
+    /// La cuenta de GitHub, <b>desconectada</b> mientras nadie la conecte. De su perfil sale la
+    /// identidad que se puede publicar (D-037), y por eso el arnés la tiene a mano.
+    /// </summary>
+    private readonly GitHubAccountService _account;
     private readonly HubContext _hub;
     private readonly MachineConfigStore _machines;
     private readonly UlidFactory _ulids = new(SystemClock.Instance);
@@ -70,7 +76,8 @@ public sealed class AssistedFixTests : IDisposable
         _paths = new AppPaths(Path.Combine(_root, "local"));
         _settings = new SettingsService(_paths);
         _settings.Load();
-        _hub = TestFactory.Hub(_paths, _settings);
+        _account = TestFactory.Account(_paths);
+        _hub = TestFactory.Hub(_paths, _settings, account: _account);
         _hub.Store.WriteHub(new HubInfo { OrganizationName = "Org" });
         _machines = new MachineConfigStore(_paths.MachinesJson);
         _snapshots = new FixSnapshotStore(_paths);
@@ -1845,11 +1852,57 @@ public sealed class AssistedFixTests : IDisposable
         vm.CommittedLine.Should().NotContain(_hub.ResolveIdentity().Name);
         vm.CommittedLine.Should().NotContain(Environment.UserName);
 
-        // Y sobrevive a volver por «Último arreglo», porque se guarda con el hash.
-        _hub.Store.ListFixes(Slug).Single().CommitAuthor.Should().Be($"{Nombre} <{Correo}>");
+        // Y sobrevive a volver por «Último arreglo», porque se guarda con el hash. Lo que se
+        // guarda, eso sí, pasa por D-037 (PROV-2 §5): este arnés no tiene cuenta conectada, así
+        // que no hay `noreply` que construir y al hub va SOLO EL NOMBRE. El correo del clon es de
+        // quien commitea, y el fichero de fix se publica.
+        _hub.Store.ListFixes(Slug).Single().CommitAuthor.Should().Be(Nombre);
         fix.CommittedAuthor = null;
         await vm.LoadAsync();
-        vm.CommittedLine.Should().Contain($"como {Nombre} <{Correo}>");
+        vm.CommittedLine.Should().Contain($"como {Nombre}");
+        vm.CommittedLine.Should().NotContain(Correo);
+    }
+
+    /// <summary>
+    /// <b><c>commitAuthor</c> no filtra un correo privado</b> (PROV-2 §5).
+    /// <para>
+    /// <b>De dónde sale.</b> La medida PROV-1 abrió un <c>apps/{slug}/fixes/{ulid}.json</c> de la
+    /// máquina medida y encontró en <c>commitAuthor</c> una dirección personal de retransmisión
+    /// privada de Apple, leída de la identidad de git del clon. Ese fichero se publica en el hub:
+    /// va a git, y de un historial ajeno ya no se retira.
+    /// </para>
+    /// <para>
+    /// Lo que se enseña <b>no cambia</b>: la línea del hash sigue diciendo con quién se firmó de
+    /// verdad (D-1035), porque esa identidad puede ser un marcador y quien juzga es el usuario. Lo
+    /// que se sanea es lo que se escribe, y con la regla de la casa para publicar identidades
+    /// (D-037): el nombre del commit con el <c>noreply</c> del perfil conectado.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task El_fichero_del_arreglo_no_lleva_el_correo_privado_del_commit()
+    {
+        const string Nombre = "Ana Pérez";
+        const string Privado = "ab12cd@privaterelay.appleid.com";
+        using (var repo = new LibGit2Sharp.Repository(_clone))
+        {
+            repo.Config.Set("user.name", Nombre, LibGit2Sharp.ConfigurationLevel.Local);
+            repo.Config.Set("user.email", Privado, LibGit2Sharp.ConfigurationLevel.Local);
+        }
+
+        // Un perfil con el correo en privado: GitHub no lo publica, y D-037 da el `noreply`.
+        _account.Connect("gho_x", new GitHubUser(4242, "alloci88", "Ana L.", null, null));
+
+        LiveFixService fix = await FixedSession();
+        FixCommitResult result = fix.CommitChanges();
+        result.Ok.Should().BeTrue(result.Error);
+
+        // Se ENSEÑA el autor de verdad: eso no lo toca esta regla.
+        fix.CommittedAuthor.Should().Be($"{Nombre} <{Privado}>");
+
+        // Y al hub va el nombre con el correo publicable.
+        FixRecord escrito = _hub.Store.ListFixes(Slug).Single();
+        escrito.CommitAuthor.Should().Be($"{Nombre} <4242+alloci88@users.noreply.github.com>");
+        escrito.CommitAuthor.Should().NotContain("privaterelay", "un correo privado no va a git");
     }
 
     /// <summary>

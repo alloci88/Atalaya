@@ -49,6 +49,60 @@ public sealed class GitHubAccountTests : IDisposable
         withEmail.CommitEmail.Should().Be("ana@example.com");
     }
 
+    // ============================================ PROV-2 §5 · lo que se PUBLICA del autor (D-037)
+
+    /// <summary>
+    /// <b>Un correo privado no viaja al hub.</b> El autor del commit del arreglo se escribe en
+    /// <c>fixes/{ulid}.json</c>, que se publica; en la máquina que midió PROV-1 ese correo era una
+    /// dirección personal de retransmisión privada de Apple. Se sustituye por el de D-037 y se
+    /// conserva el nombre del commit, que es lo que sirve para leer el historial.
+    /// </summary>
+    [Fact]
+    public void Un_correo_privado_del_commit_se_sustituye_por_el_de_D037()
+    {
+        GitHubAccount account = Connected(email: null);
+
+        HubCommitIdentity.ForHub("Ana Pérez <ab12cd@privaterelay.appleid.com>", account)
+            .Should().Be("Ana Pérez <4242+alloci88@users.noreply.github.com>");
+    }
+
+    /// <summary>
+    /// <b>Lo que ya es público pasa tal cual</b>, y lo que no trae correo también: sanear de más
+    /// borraría una traza que no molesta a nadie. Un <c>noreply</c> de GitHub es público por
+    /// construcción, y el correo del perfil lo publica la propia cuenta.
+    /// </summary>
+    [Fact]
+    public void Lo_que_ya_es_publico_se_escribe_tal_cual()
+    {
+        GitHubAccount conCorreoPublico = Connected(email: "ana@example.com");
+
+        HubCommitIdentity.ForHub("Ana Pérez", conCorreoPublico).Should().Be("Ana Pérez");
+        HubCommitIdentity.ForHub("Ana Pérez <ana@example.com>", conCorreoPublico)
+            .Should().Be("Ana Pérez <ana@example.com>");
+        HubCommitIdentity.ForHub("Ana Pérez <9+ana@users.noreply.github.com>", conCorreoPublico)
+            .Should().Be("Ana Pérez <9+ana@users.noreply.github.com>");
+    }
+
+    /// <summary>
+    /// <b>Sin cuenta conectada se publica solo el nombre.</b> No hay <c>noreply</c> que construir
+    /// —se arma con el id y el login del perfil—, y entre perder el correo o publicar uno privado
+    /// no hay duda: lo segundo no se puede deshacer de un historial ajeno. Se comprueba también con
+    /// un valor que sea solo el correo, sin ángulos: el saneo no puede depender del formato.
+    /// </summary>
+    [Fact]
+    public void Sin_cuenta_conectada_se_publica_solo_el_nombre()
+    {
+        HubCommitIdentity.ForHub("Ana Pérez <ab12cd@privaterelay.appleid.com>", account: null)
+            .Should().Be("Ana Pérez");
+        HubCommitIdentity.ForHub("ab12cd@privaterelay.appleid.com", account: null)
+            .Should().BeNull();
+    }
+
+    /// <summary>Una cuenta conectada con el perfil que devuelve <c>GET /user</c>.</summary>
+    private static GitHubAccount Connected(string? email)
+        => GitHubAccount.From(
+            new GitHubUser(4242, "alloci88", "Ana L.", null, email), "gho_x", DateTimeOffset.UtcNow);
+
     [Fact]
     public async Task Organization_membership_is_checked_against_user_orgs()
     {

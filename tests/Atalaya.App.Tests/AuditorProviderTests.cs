@@ -413,6 +413,44 @@ public sealed class AuditorProviderTests : IDisposable
         Settings(registry).HasProviderChoice.Should().BeTrue();
     }
 
+    /// <summary>
+    /// <b>El aviso de Ajustes dice quién arregla DE VERDAD</b> (PROV-2 §5).
+    /// <para>
+    /// <b>De dónde sale.</b> Esa línea decía «El arreglo asistido sigue siendo de Copilot» desde
+    /// antes de F16, y desde F16 es falso: arregla el proveedor elegido. Un texto que nombra una
+    /// casa a mano es una afirmación que nadie vuelve a comprobar, y ésta llevaba una entrega
+    /// entera mintiéndole al usuario en la pantalla donde se decide justo eso.
+    /// </para>
+    /// <para>
+    /// Aquí se elige la otra casa y se exige que el aviso la nombre a ELLA, con el nombre que el
+    /// propio proveedor declara. Y se comprueba el otro lado: un proveedor que no sabe arreglar no
+    /// puede aparecer como si arreglara.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void El_aviso_de_Ajustes_dice_quien_arregla_ahora()
+    {
+        var registry = new AuditorProviderRegistry(_settings, new IAuditorProvider[]
+        {
+            new NamedFixer(RealCopilotAgent.Id, "GitHub Copilot", "gpt-x"),
+            new NamedFixer(ClaudeCodeProvider.Id, "Claude Code", "opus"),
+        });
+
+        SettingsViewModel ajustes = Settings(registry);
+
+        ajustes.ProviderNotice.Should().EndWith("El arreglo asistido también es de GitHub Copilot.");
+
+        // Elegir la otra casa cambia el aviso en el acto: es la línea de ayuda de ESE desplegable.
+        ajustes.SelectedProviderId = ClaudeCodeProvider.Id;
+        ajustes.ProviderNotice.Should().EndWith("El arreglo asistido también es de Claude Code.");
+        ajustes.ProviderNotice.Should().NotContain("Copilot");
+
+        // Y quien solo audita no se anuncia como quien arregla.
+        SettingsViewModel soloAudita = Settings(RegistryWithoutClaude());
+        soloAudita.ProviderNotice.Should()
+            .EndWith("GitHub Copilot audita, pero no hace arreglos asistidos.");
+    }
+
     /// <summary>Copilot NO es opcional: es el requisito, y su fallo sí es un fallo.</summary>
     [Fact]
     public void Copilot_no_es_opcional()
@@ -503,8 +541,22 @@ public sealed class AuditorProviderTests : IDisposable
         _hub.Store.WriteSession(session);
     }
 
+    /// <summary>
+    /// El mismo doble, pero que <b>sabe arreglar</b>. Existe porque desde F16 hay una diferencia
+    /// que se ve en pantalla —quién arregla— entre un proveedor y otro, y sin dos dobles distintos
+    /// no se puede comprobar. No añade ni un miembro: <c>FixAsync</c> tiene implementación por
+    /// defecto, que es justo para esto.
+    /// </summary>
+    private sealed class NamedFixer : NamedAgent, IAssistedFixProvider
+    {
+        public NamedFixer(string id, string name, string model)
+            : base(id, name, model)
+        {
+        }
+    }
+
     /// <summary>Un agente que solo aporta su identidad: es lo que estos tests miran.</summary>
-    private sealed class NamedAgent : IAuditorProvider
+    private class NamedAgent : IAuditorProvider
     {
         private readonly string _model;
 

@@ -525,6 +525,15 @@ public sealed class HubContext
     }
 
     /// <summary>
+    /// La cuenta conectada, o <c>null</c>. Se expone para lo que necesita la identidad de D-037
+    /// <b>entera</b> —el correo público y el <c>noreply</c>, no solo el nombre—, que es lo que
+    /// decide qué autor se puede publicar en el hub (ver <see cref="HubCommitIdentity"/>).
+    /// <see cref="ResolveIdentity"/> no sirve para eso: cae al config global de git, que es
+    /// justamente de donde sale el correo que no se quiere publicar.
+    /// </summary>
+    public GitHubAccount? Account => _account.Current;
+
+    /// <summary>
     /// Git identity for hub commits: the connected account's profile (D2.2), else the explicit
     /// setting kept from before F2, else the global git config, else a placeholder.
     /// </summary>

@@ -1326,7 +1326,11 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         }
 
         record.CommitSha = sha;
-        record.CommitAuthor = CommittedAuthor;
+        // PROV-2 §5 — lo que se ESCRIBE pasa por D-037. `CommittedAuthor` es el autor real del
+        // commit y se sigue enseñando tal cual (D-1035); este fichero, en cambio, se publica en el
+        // hub, y el correo de la identidad de git del clon puede ser uno privado que nadie eligió
+        // publicar. Se sanea aquí, en el sitio donde se escribe, y no antes.
+        record.CommitAuthor = HubCommitIdentity.ForHub(CommittedAuthor, _hub.Account);
         _hub.Store.WriteFix(record);
     }
 
