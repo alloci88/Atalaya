@@ -284,18 +284,46 @@ public sealed class AppSettings
 
 
     /// <summary>
-    /// Modelo de Copilot con el que se lanzan las sesiones nuevas (<c>SessionConfig.Model</c>).
-    /// La lista de opciones se pide al SDK (<c>ListModelsAsync</c>), nunca se codifica a mano; esto
-    /// solo guarda el id elegido.
+    /// <b>El modelo con el que cada casa lanza sus sesiones, indexado por su identificador de
+    /// proveedor</b> (PROV-2 §2). La lista de opciones se le pide al proveedor
+    /// (<c>ListModelsAsync</c>), nunca se codifica a mano; esto solo guarda el id elegido.
     /// <para>
-    /// <b>Vacío por defecto, y es importante que lo sea (F5.15).</b> Aquí ponía <c>"gpt-5"</c>
-    /// escrito a mano. El día que GitHub retiró ese modelo, toda máquina con ajustes vírgenes nació
-    /// rota: la primera auditoría moría en <c>session.create</c>. Un nombre de modelo es un dato del
-    /// proveedor con fecha de caducidad y no puede vivir como constante. Vacío significa
-    /// «pregúntaselo al runtime», y de eso se encarga <c>ModelResolver</c> en el primer lanzamiento.
+    /// <b>Un mapa y no dos campos, y ésa es la entrega.</b> Hasta PROV-2 había <c>copilotModel</c>
+    /// y <c>claudeCodeModel</c>, y elegir entre ellos era un <c>if</c>: «si no es Claude Code, es
+    /// el de Copilot». Con un tercer proveedor eso no es una simplificación, es un error — le
+    /// entregaría el modelo de Copilot, que para él no significa nada. Lo que ya hubiera escrito
+    /// con los nombres viejos lo adopta <see cref="SettingsService.AdoptLegacyProviderModels"/>,
+    /// una vez, sin perderle el ajuste a nadie.
+    /// </para>
+    /// <para>
+    /// <b>Sin entrada significa vacío, y vacío es importante que sea el valor por defecto</b>
+    /// (F5.15). El modelo de Copilot nació aquí con <c>"gpt-5"</c> escrito a mano; el día que
+    /// GitHub lo retiró, toda máquina con ajustes vírgenes nació rota. Un nombre de modelo es un
+    /// dato del proveedor con fecha de caducidad y no puede vivir como constante: vacío significa
+    /// «pregúntaselo al runtime», y de eso se encarga <c>ModelResolver</c> en el primer
+    /// lanzamiento.
+    /// </para>
+    /// <para>
+    /// <b>Y siguen siendo independientes por casa</b>, que era lo bueno de los dos campos: los
+    /// espacios de nombres no se solapan —<c>gpt-5</c> no significa nada para Claude Code y
+    /// <c>opus</c> no significa nada para Copilot—, así que ir y volver conserva las dos
+    /// elecciones en vez de dejar una configurada con un id imposible.
     /// </para>
     /// </summary>
-    public string CopilotModel { get; set; } = string.Empty;
+    /// <remarks>
+    /// El comparador es insensible a mayúsculas y se REPONE en el <c>set</c>: lo que devuelve
+    /// <c>JsonSerializer</c> es un diccionario ordinal recién creado, así que sin esto un
+    /// identificador guardado con otra caja no se encontraría.
+    /// </remarks>
+    public Dictionary<string, string> ProviderModels
+    {
+        get => _providerModels;
+        set => _providerModels = value is null
+            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, string>(value, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private Dictionary<string, string> _providerModels = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Con qué proveedor se lanzan las sesiones nuevas de ESTA máquina (F14): <c>copilot</c> o
@@ -315,23 +343,6 @@ public sealed class AppSettings
     /// </para>
     /// </summary>
     public string AuditorProvider { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Modelo con el que Claude Code lanza las sesiones (<c>claude --model</c>).
-    /// <para>
-    /// <b>Es un campo aparte de <see cref="CopilotModel"/> a propósito.</b> Los dos espacios de
-    /// nombres no se solapan —<c>gpt-5</c> no significa nada para Claude Code y <c>opus</c> no
-    /// significa nada para Copilot—, así que compartir el campo garantizaría que cambiar de
-    /// proveedor dejara configurado un modelo imposible. Con uno cada uno, ir y volver conserva
-    /// las dos elecciones.
-    /// </para>
-    /// <para>
-    /// Vacío por defecto, por la misma razón que el de Copilot (F5.15): un nombre de modelo es un
-    /// dato del proveedor con fecha de caducidad y no puede vivir como constante. Vacío significa
-    /// «que elija el CLI», y de eso se encarga <c>ModelResolver</c>.
-    /// </para>
-    /// </summary>
-    public string ClaudeCodeModel { get; set; } = string.Empty;
 
     // ---- Aviso de versión nueva (F8 §3) ----
 
@@ -588,31 +599,137 @@ public sealed class SettingsService
     }
 
     /// <summary>
-    /// El modelo configurado para UN proveedor (F14). Cada casa tiene su campo porque sus espacios
-    /// de nombres no se solapan; esto es el único sitio que sabe cuál es cuál, para que el
-    /// resolutor de modelo y Ajustes no tengan que repetir el <c>switch</c>.
+    /// El modelo configurado para UN proveedor (F14, PROV-2 §2). Es una <b>entrada del mapa</b>
+    /// <see cref="AppSettings.ProviderModels"/>, buscada por el identificador que declara el
+    /// proveedor; vacío significa «esta casa todavía no tiene ninguno elegido», y de eso se
+    /// encarga <c>ModelResolver</c> al lanzar.
+    /// <para>
+    /// Aquí había un binario —«si no es Claude Code, es el de Copilot»— y por eso un tercer
+    /// proveedor recibía el modelo de Copilot: un id que para él no significa nada, y que le
+    /// rompería la primera sesión.
+    /// </para>
     /// </summary>
     public string ModelFor(string? providerId)
-        => IsClaudeCode(providerId) ? Current.ClaudeCodeModel : Current.CopilotModel;
+    {
+        string key = (providerId ?? string.Empty).Trim();
+        return key.Length > 0 && Current.ProviderModels.TryGetValue(key, out string? model)
+            ? model ?? string.Empty
+            : string.Empty;
+    }
 
-    /// <summary>Guarda el modelo elegido para ese proveedor, sin tocar el del otro.</summary>
+    /// <summary>
+    /// Guarda el modelo elegido para ese proveedor, sin tocar el de nadie más. Sin identificador
+    /// no escribe: un modelo sin dueño acabaría siendo el de quien no lo eligió, que es
+    /// exactamente el fallo del binario anterior.
+    /// </summary>
     public void SetModelFor(string? providerId, string modelId)
     {
-        AppSettings settings = Current;
-        if (IsClaudeCode(providerId))
+        string key = (providerId ?? string.Empty).Trim();
+        if (key.Length == 0)
         {
-            settings.ClaudeCodeModel = modelId;
-        }
-        else
-        {
-            settings.CopilotModel = modelId;
+            return;
         }
 
+        AppSettings settings = Current;
+        settings.ProviderModels[key] = (modelId ?? string.Empty).Trim();
         Save(settings);
     }
 
-    private static bool IsClaudeCode(string? providerId)
-        => string.Equals(providerId, "claude-code", StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// <b>Adopta, una sola vez, el modelo que cada casa tenía guardado con su nombre viejo</b>
+    /// (PROV-2 §2). Lo llama el arranque con los proveedores del registro, justo después de
+    /// construirlo.
+    /// <para>
+    /// <b>Lo que no se puede perder es el ajuste de nadie.</b> Hasta esta entrega los modelos
+    /// vivían en campos con nombre propio —<c>copilotModel</c>, <c>claudeCodeModel</c>— en el
+    /// <c>settings.json</c> de cada máquina. Al pasar a un mapa por identificador, una
+    /// actualización sin esto le borraría a todo el mundo el modelo que tenía elegido, en
+    /// silencio: lo notaría en la siguiente auditoría, ya lanzada.
+    /// </para>
+    /// <para>
+    /// <b>Cada casa dice con qué nombre guardaba el suyo</b> (<c>LegacyModelSettingKey</c>), y la
+    /// clave se busca en el JSON crudo: ni reflexión ni una tabla de nombres aquí, que sería
+    /// volver a repartir el conocimiento del proveedor por la aplicación. Quien no declare nombre
+    /// viejo no tiene nada que adoptar, que es lo que le pasa a una casa nueva.
+    /// </para>
+    /// <para>
+    /// <b>Es idempotente por doble motivo</b>: una entrada que ya está en el mapa no se pisa —el
+    /// usuario pudo elegir otro desde entonces—, y al guardar, las claves viejas dejan de
+    /// escribirse. Un valor vacío no crea entrada: vacío sigue siendo vacío.
+    /// </para>
+    /// </summary>
+    /// <returns>Si hubo algo que adoptar, y por tanto se escribió.</returns>
+    public bool AdoptLegacyProviderModels(IEnumerable<IAuditorProvider> providers)
+    {
+        IReadOnlyDictionary<string, string> legacy = ReadRawStrings();
+        if (legacy.Count == 0)
+        {
+            return false;
+        }
+
+        AppSettings settings = Current;
+        bool changed = false;
+        foreach (IAuditorProvider provider in providers)
+        {
+            string key = (provider.LegacyModelSettingKey ?? string.Empty).Trim();
+            string id = provider.ProviderId.Trim();
+            if (key.Length == 0 || id.Length == 0 || settings.ProviderModels.ContainsKey(id))
+            {
+                continue;
+            }
+
+            if (legacy.TryGetValue(key, out string? model) && !string.IsNullOrWhiteSpace(model))
+            {
+                settings.ProviderModels[id] = model.Trim();
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            Save(settings);
+        }
+
+        return changed;
+    }
+
+    /// <summary>
+    /// Las claves de texto de primer nivel del <c>settings.json</c> tal cual están en el fichero.
+    /// Es la única forma de leer un ajuste cuyo nombre ya no es una propiedad de
+    /// <see cref="AppSettings"/> — que es justo el caso de los que se adoptan.
+    /// </summary>
+    private IReadOnlyDictionary<string, string> ReadRawStrings()
+    {
+        var raw = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (!File.Exists(_path))
+        {
+            return raw;
+        }
+
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(File.ReadAllText(_path));
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return raw;
+            }
+
+            foreach (JsonProperty property in document.RootElement.EnumerateObject())
+            {
+                if (property.Value.ValueKind == JsonValueKind.String)
+                {
+                    raw[property.Name] = property.Value.GetString() ?? string.Empty;
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Un fichero ilegible ya lo trata Load() volviendo a los valores de fábrica; aquí no
+            // hay nada que adoptar y tampoco nada que romper.
+        }
+
+        return raw;
+    }
 
     /// <summary>Encrypts and stores a PAT with DPAPI (current-user scope).</summary>
     public void SetPat(string? plainTextPat)

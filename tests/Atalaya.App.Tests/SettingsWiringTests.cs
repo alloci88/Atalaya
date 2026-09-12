@@ -217,25 +217,25 @@ public sealed class SettingsWiringTests : IDisposable
     [Fact]
     public void El_modelo_lo_lee_el_resolutor_del_ajuste()
     {
-        AppSettings s = _settings.Current;
-        s.CopilotModel = "un-modelo-elegido";
-        _settings.Save(s);
+        _settings.SetModelFor("copilot", "un-modelo-elegido");
 
-        // F14: el resolutor ya no nombra el ajuste de una casa concreta —hay dos, con un campo
-        // cada una— sino que lo pide POR PROVEEDOR. La garantía sigue siendo la misma y ahora se
-        // comprueba en sus dos mitades: que el resolutor pregunta, y que quien contesta lee los
-        // ajustes de verdad y no una constante.
+        // F14: el resolutor ya no nombra el ajuste de una casa concreta sino que lo pide POR
+        // PROVEEDOR. La garantía sigue siendo la misma y se comprueba en sus dos mitades: que el
+        // resolutor pregunta, y que quien contesta lee los ajustes de verdad y no una constante.
+        // PROV-2 §2: lo que lee es el MAPA por identificador, ya no un campo con nombre de casa.
         Reflection.SourceOf(typeof(ModelResolver)).Should().Contain("_settings.ModelFor(");
-        Reflection.ReadsSetting(typeof(SettingsService), "CopilotModel").Should().BeTrue();
-        Reflection.ReadsSetting(typeof(SettingsService), "ClaudeCodeModel").Should().BeTrue();
+        Reflection.ReadsSetting(typeof(SettingsService), "ProviderModels").Should().BeTrue();
 
         _settings.ModelFor("copilot").Should().Be("un-modelo-elegido");
 
-        // Y que los dos campos son independientes: cambiar de proveedor no puede pisar la
-        // elección del otro, porque sus espacios de nombres no se solapan.
+        // Y que las entradas son independientes: cambiar de proveedor no puede pisar la elección
+        // del otro, porque sus espacios de nombres no se solapan. Con un mapa eso ya no depende
+        // de que alguien acuerde de añadir un campo por cada casa nueva.
         _settings.SetModelFor("claude-code", "opus");
         _settings.ModelFor("copilot").Should().Be("un-modelo-elegido");
         _settings.ModelFor("claude-code").Should().Be("opus");
+        _settings.ModelFor("una-casa-que-no-existe").Should().BeEmpty(
+            "un tercer proveedor no hereda el modelo de nadie: recibiría un id que no reconoce");
     }
 
     /// <summary>Arreglo asistido: apagado, el lanzador se niega y lo dice.</summary>
@@ -305,7 +305,7 @@ public sealed class SettingsWiringTests : IDisposable
         s.MaxPassesPerUnit.Should().Be(SettingsLimits.DefaultMaxPassesPerUnit);
         s.CopilotTimeoutMinutes.Should().Be(15);
         s.EnableAssistedFix.Should().BeTrue();
-        s.CopilotModel.Should().BeEmpty("un nombre de modelo caduca; se le pregunta al runtime");
+        s.ProviderModels.Should().BeEmpty("un nombre de modelo caduca; se le pregunta al runtime");
     }
 
     /// <summary>Y los mismos valores salen de una instancia nueva, sin fichero ninguno.</summary>

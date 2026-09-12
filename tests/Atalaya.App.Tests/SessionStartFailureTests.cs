@@ -71,11 +71,20 @@ public sealed class SessionStartFailureTests : IDisposable
         }
     }
 
-    private void Configure(string model)
+    /// <summary>
+    /// El identificador del doble con el que corren estos casos. PROV-2 §2: el modelo se guarda en
+    /// la entrada de SU proveedor, así que el ajuste se escribe y se lee con el id del que audita
+    /// —no con el nombre de un campo de una casa concreta, que es lo que había aquí—.
+    /// </summary>
+    private static readonly string ProviderId = new FakeCopilotAgent().ProviderId;
+
+    private void Configure(string model) => _settings.SetModelFor(ProviderId, model);
+
+    /// <summary>Lo que quedó GUARDADO, releído del fichero.</summary>
+    private string SavedModel()
     {
-        AppSettings s = _settings.Current;
-        s.CopilotModel = model;
-        _settings.Save(s);
+        _settings.Load();
+        return _settings.ModelFor(ProviderId);
     }
 
     private LiveSessionService Live(IAuditorProvider agent, ModelResolver? models = null)
@@ -271,7 +280,7 @@ public sealed class SessionStartFailureTests : IDisposable
         r.Changed.Should().BeTrue();
         r.Failed.Should().BeFalse();
         r.Notice.Should().Contain("automáticamente").And.Contain("modelo-a").And.Contain("Ajustes");
-        _settings.Load().CopilotModel.Should().Be("modelo-a", "y se guarda: no se resuelve dos veces");
+        SavedModel().Should().Be("modelo-a", "y se guarda: no se resuelve dos veces");
     }
 
     /// <summary>El caso del parte: el modelo guardado ya no existe. Se sustituye y se avisa.</summary>
@@ -286,7 +295,7 @@ public sealed class SessionStartFailureTests : IDisposable
         r.Changed.Should().BeTrue();
         r.Notice.Should().Contain("gpt-que-retiraron").And.Contain("ya no está disponible")
             .And.Contain("modelo-nuevo");
-        _settings.Load().CopilotModel.Should().Be("modelo-nuevo");
+        SavedModel().Should().Be("modelo-nuevo");
     }
 
     /// <summary>Y si el configurado sigue vivo, no se toca nada ni se molesta al usuario.</summary>
@@ -300,7 +309,7 @@ public sealed class SessionStartFailureTests : IDisposable
         r.ModelId.Should().Be("modelo-b");
         r.Changed.Should().BeFalse();
         r.Notice.Should().BeNull("el caso normal no merece un aviso");
-        _settings.Load().CopilotModel.Should().Be("modelo-b");
+        SavedModel().Should().Be("modelo-b");
     }
 
     /// <summary>
@@ -320,7 +329,7 @@ public sealed class SessionStartFailureTests : IDisposable
 
         r.Failed.Should().BeTrue();
         r.Notice.Should().Contain("sin red").And.Contain("Ajustes");
-        _settings.Load().CopilotModel.Should().BeEmpty("no se inventa un modelo cuando no se pudo preguntar");
+        SavedModel().Should().BeEmpty("no se inventa un modelo cuando no se pudo preguntar");
     }
 
     /// <summary>Sin lista pero con modelo elegido se sigue: puede ser válido y el fallo estar en la red.</summary>
@@ -361,7 +370,7 @@ public sealed class SessionStartFailureTests : IDisposable
         live.HasFailed.Should().BeFalse("con el modelo resuelto la sesión arranca");
         live.HasFinished.Should().BeTrue();
         avisos.Should().ContainSingle().Which.Should().Contain("modelo-a");
-        _settings.Load().CopilotModel.Should().Be("modelo-a");
+        SavedModel().Should().Be("modelo-a");
     }
 
     /// <summary>

@@ -7,11 +7,20 @@ namespace Atalaya.ClaudeCode;
 /// <summary>
 /// El catálogo de herramientas del auditor, traducido a MCP (F14).
 /// <para>
-/// <b>Los nombres y las descripciones son LOS MISMOS que ve Copilot</b>, palabra por palabra. No es
-/// pulcritud: el prompt de la unidad —que es el mismo para los dos proveedores— nombra estas tools
-/// y explica cuándo usar cada una. Si aquí se llamaran distinto, o si la descripción dijera algo
-/// distinto, el mismo prompt significaría dos cosas y las dos casas no serían comparables. Toda la
-/// gracia de tener un segundo auditor es que discrepen sobre el CÓDIGO, no sobre las instrucciones.
+/// <b>Los nombres y las descripciones son LOS MISMOS que ve Copilot</b>, palabra por palabra, y
+/// desde PROV-2 §3 lo son porque salen de la MISMA constante: <see cref="AuditToolText"/>, en
+/// <c>Atalaya.Agents</c>. No es pulcritud: el prompt de la unidad —que es el mismo para los dos
+/// proveedores— nombra estas tools y explica cuándo usar cada una. Si aquí se llamaran distinto, o
+/// si la descripción dijera algo distinto, el mismo prompt significaría dos cosas y las dos casas
+/// no serían comparables. Toda la gracia de tener un segundo auditor es que discrepen sobre el
+/// CÓDIGO, no sobre las instrucciones — y con el texto copiado a mano ya había divergido
+/// <c>unit_done</c>.
+/// </para>
+/// <para>
+/// <b>Lo único que este catálogo añade de suyo es la TERMINALIDAD</b>, y no como texto distinto:
+/// como marca (<c>McpTool.IsTerminal</c>), leída de la misma fuente. MCP no tiene el concepto que
+/// el SDK de Copilot sí tiene, así que el transporte la traduce a palabras al publicar el catálogo
+/// (<see cref="McpTerminal"/>) — las mismas palabras para cualquier terminal.
 /// </para>
 /// <para>
 /// <b>Y son exactamente éstas.</b> No hay consola, ni ficheros, ni red: el código viaja en el
@@ -78,37 +87,26 @@ public static class AuditorTools
         var tools = new List<McpTool>
         {
             new(
-                "submit_findings",
-                "PREFERIDA. Reporta TODOS los hallazgos de la unidad en UNA sola llamada, pasando un array. "
-                + "Devuelve un array de {accepted, duplicateOf, error, id} en el mismo orden; el id es el ULID "
-                + "del hallazgo creado, y es con el que luego le das veredicto o le añades ubicaciones.",
+                AuditToolText.SubmitFindings,
+                AuditToolText.SubmitFindingsDescription,
                 Schema.Object(("findings", Schema.Array(finding, "Los hallazgos de esta unidad."), true)),
                 args => toolbox.SubmitFindings(ReadFindings(args, "findings"))),
 
             new(
-                "submit_finding",
-                "Fallback singular. Úsala solo si por alguna razón no puedes agrupar; cada llamada añade un turno. "
-                + "Devuelve {accepted, duplicateOf, error, id}, con el ULID del hallazgo creado.",
+                AuditToolText.SubmitFinding,
+                AuditToolText.SubmitFindingDescription,
                 finding,
                 args => toolbox.SubmitFinding(ReadFinding(args))),
 
             new(
-                "report_verdicts",
-                "OBLIGATORIA cuando la unidad tiene hallazgos existentes. Un array con un veredicto por CADA "
-                + "hallazgo listado: {findingId (ULID exacto de la lista), verdict "
-                + "(presente|arreglado|no-es-defecto|no-verificable), evidence}. Usa 'arreglado' SOLO si el "
-                + "código cambió y por eso el problema ya no está; si lo que ocurre es que discrepas de quien "
-                + "lo reportó, usa 'no-es-defecto' con tu razonamiento. Devuelve un array de {accepted, error} "
-                + "en el mismo orden.",
+                AuditToolText.ReportVerdicts,
+                AuditToolText.ReportVerdictsDescription,
                 Schema.Object(("verdicts", Schema.Array(verdict, "Un veredicto por hallazgo existente."), true)),
                 args => toolbox.ReportVerdicts(ReadVerdicts(args))),
 
             new(
-                "add_locations",
-                "Extiende un hallazgo YA existente con ubicaciones nuevas de esta misma unidad. Úsala cuando "
-                + "el MISMO defecto aparece en varios sitios: un defecto sistémico es UN hallazgo con N "
-                + "ubicaciones, no N hallazgos. findingId debe ser un ULID de la lista de existentes o de uno "
-                + "que hayas reportado en esta unidad.",
+                AuditToolText.AddLocations,
+                AuditToolText.AddLocationsDescription,
                 Schema.Object(
                     ("findingId", Schema.Text("ULID del hallazgo que se extiende."), true),
                     ("locations", Schema.Array(location, "Las ubicaciones nuevas."), true)),
@@ -117,11 +115,8 @@ public static class AuditorTools
                     ReadLocations(args, "locations"))),
 
             new(
-                "unit_done",
-                "Cierra la unidad en curso con un resumen. Si el prompt trae TIPOS DE PROBLEMA SILENCIADOS y "
-                + "te has callado alguna detección por uno de ellos, declara cuántas en suppressedByPattern: "
-                + "un array de {patternId (el id EXACTO del prompt, p. ej. P-2), count}. Déjalo vacío si no te "
-                + "has callado nada. Cuando la llames, HAS TERMINADO: no digas nada más.",
+                AuditToolText.UnitDone,
+                AuditToolText.UnitDoneDescription,
                 Schema.Object(
                     ("unitPath", Schema.Text("La unidad que cierras."), true),
                     ("summary", Schema.Text("Resumen de lo que has hecho en ella."), true),
@@ -130,11 +125,14 @@ public static class AuditorTools
                 {
                     toolbox.UnitDone(Text(args, "unitPath"), Text(args, "summary"), ReadSuppressions(args));
                     return new { ok = true };
-                }),
+                },
+                // Y es TERMINAL. La marca sale del catálogo compartido, no de un `true` escrito
+                // aquí: la misma herramienta no puede cerrar el turno en una casa y no en la otra.
+                IsTerminal: AuditToolText.IsTerminal(AuditToolText.UnitDone)),
 
             new(
-                "read_signatures",
-                "Devuelve las firmas (no cuerpos) de las dependencias directas de la unidad.",
+                AuditToolText.ReadSignatures,
+                AuditToolText.ReadSignaturesDescription,
                 Schema.Object(("path", Schema.Text("Ruta de la dependencia."), true)),
                 args => new { signatures = toolbox.ReadSignatures(Text(args, "path")) }),
         };
@@ -152,7 +150,7 @@ public static class AuditorTools
     private static IReadOnlyList<McpTool> WithCreatedIds(
         IReadOnlyList<McpTool> tools, ISweepCreations creations)
         => tools
-            .Select(t => t.Name is "submit_findings" or "submit_finding"
+            .Select(t => t.Name is AuditToolText.SubmitFindings or AuditToolText.SubmitFinding
                 ? t with { Handler = WithIds(t.Handler, creations) }
                 : t)
             .ToList();
@@ -175,8 +173,8 @@ public static class AuditorTools
         => new List<McpTool>
         {
             new(
-                "submit_verdict",
-                "Registra el veredicto de un hallazgo por su ULID: confirmado | resuelto | no-verificable.",
+                AuditToolText.SubmitVerdict,
+                AuditToolText.SubmitVerdictDescription,
                 Schema.Object(
                     ("findingUlid", Schema.Text("El ULID exacto del hallazgo."), true),
                     ("verdict", Schema.Text("confirmado | resuelto | no-verificable."), true),

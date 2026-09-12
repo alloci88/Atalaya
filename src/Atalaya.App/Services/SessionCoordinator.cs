@@ -1,5 +1,4 @@
-﻿using Atalaya.ClaudeCode;
-using Atalaya.Domain;
+﻿using Atalaya.Domain;
 using Atalaya.Domain.Anchoring;
 using Atalaya.Domain.Hashing;
 using Atalaya.Domain.Ids;
@@ -515,7 +514,11 @@ public sealed class SessionCoordinator
         // ahorra la llamada de cortesía del CLI; cuando no se puede —porque el proveedor no había
         // publicado el consumo de todas sus llamadas, o porque quedaba una herramienta a medias—
         // la pasada cuesta una llamada más, y eso NO puede quedar como una cifra sin causa (N-2).
-        // Se pregunta por el tipo porque el corte es de esta casa: Copilot no tiene esta llamada.
+        //
+        // PROV-2 §2 — el coordinador escucha a quien DECLARE el corte (`ICuttingAuditor`), no a
+        // una casa por su tipo concreto. Cortar no es de nadie: es una capacidad, y la tiene quien
+        // la implemente. Quien no la declare no se entera de que existe, y aquí no se nombra a
+        // ningún proveedor — que es la regla de esta carpeta.
         var cutSkipped = new List<string>();
         void OnCutSkipped(string why)
         {
@@ -530,10 +533,10 @@ public sealed class SessionCoordinator
                 $"No se pudo cortar la pasada: {why} — cuesta una llamada de cortesía más");
         }
 
-        var claude = _agent as ClaudeCodeProvider;
-        if (claude is not null)
+        var cutting = _agent as ICuttingAuditor;
+        if (cutting is not null)
         {
-            claude.CutSkipped += OnCutSkipped;
+            cutting.CutSkipped += OnCutSkipped;
         }
 
         // El modelo va en el sello (F5.1b): es quien hace la observación, y hace falta para poder
@@ -1046,9 +1049,9 @@ public sealed class SessionCoordinator
                 narrating.ToolStreamed -= OnToolStreamed;
             }
             _agent.UsageReported -= OnUsage;
-            if (claude is not null)
+            if (cutting is not null)
             {
-                claude.CutSkipped -= OnCutSkipped;
+                cutting.CutSkipped -= OnCutSkipped;
             }
         }
 

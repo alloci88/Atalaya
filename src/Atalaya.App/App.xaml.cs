@@ -99,6 +99,21 @@ public partial class App : Application
         string? sweepNotice = settings.MigrateSweepCapDefault();
         // R13-2: y el editor «Otro», que ya no existe. Mismo patrón: la frase se enseña una vez.
         string? editorNotice = settings.MigrateRetiredEditor();
+
+        // PROV-2 §2 — las CASAS, antes de que nada las nombre o les pregunte el modelo.
+        //
+        // Sembrar los nombres aquí es lo que permite que los informes y las métricas —que leen
+        // sesiones de hace meses desde sitios sin registro delante— dejen de tener escritos los
+        // nombres de las dos casas. Éste es el ÚNICO escritor del mapa; sin sembrar, un
+        // identificador sale tal cual, que es lo correcto para una casa retirada.
+        //
+        // Y la adopción del modelo, por la misma razón que las promociones de arriba: las
+        // máquinas traen su modelo escrito con el nombre viejo del campo, y el mapa nuevo no las
+        // alcanza. Sin esto, una actualización le borra a todo el mundo el modelo que tenía
+        // elegido — y no lo descubriría hasta la siguiente auditoría, ya lanzada.
+        var providers = _host.Services.GetRequiredService<AuditorProviderRegistry>();
+        ProviderNames.Seed(providers.All);
+        settings.AdoptLegacyProviderModels(providers.All);
         ThemeService.Apply(settings.Current.Theme);
         // F29 §2 — la divisa, antes de que nada escriba un coste. Va aquí y no dentro de la primera
         // vista que la necesite por lo mismo que el tema: la leen el pie, las tarjetas, Métricas y

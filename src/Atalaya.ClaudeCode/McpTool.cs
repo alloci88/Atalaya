@@ -19,11 +19,37 @@ namespace Atalaya.ClaudeCode;
 /// contesta al modelo; lanzar aquí se convierte en un <c>isError</c> con el texto de la excepción,
 /// nunca en una tubería rota.
 /// </param>
+/// <param name="IsTerminal">
+/// Llamar a esta herramienta es haber terminado. Es una marca de ESTE catálogo (PROV-2 §3): el
+/// SDK de Copilot tiene el concepto y lo declara; MCP no lo tiene, así que aquí se guarda como
+/// propiedad y se traduce a palabras al publicar el catálogo (<see cref="McpTerminal"/>). Lo que
+/// NO puede pasar es que la diferencia viva en la descripción compartida.
+/// </param>
 public sealed record McpTool(
     string Name,
     string Description,
     JsonNode InputSchema,
-    Func<JsonElement, object?> Handler);
+    Func<JsonElement, object?> Handler,
+    bool IsTerminal = false);
+
+/// <summary>
+/// <b>Cómo se le dice a un modelo, por MCP, que una herramienta cierra el turno</b> (PROV-2 §3).
+/// <para>
+/// El protocolo no tiene nada equivalente al <c>IsTerminal</c> del SDK de Copilot, así que la
+/// única forma de decirlo es con palabras. Esas palabras las pone el TRANSPORTE, aquí y una sola
+/// vez: así son las mismas para cualquier herramienta terminal —hoy <c>unit_done</c>, mañana la
+/// que sea— y la descripción que comparten las dos casas se queda sin frases de más.
+/// </para>
+/// </summary>
+public static class McpTerminal
+{
+    /// <summary>Lo que se le añade a una terminal. Con el espacio delante: se pega a la descripción.</summary>
+    public const string Suffix = " Cuando la llames, HAS TERMINADO: no digas nada más.";
+
+    /// <summary>La descripción tal y como la ve el modelo por MCP.</summary>
+    public static string Describe(McpTool tool)
+        => tool.IsTerminal ? tool.Description + Suffix : tool.Description;
+}
 
 /// <summary>
 /// Ayudas para escribir esquemas JSON a mano sin que el fichero se convierta en una pared de

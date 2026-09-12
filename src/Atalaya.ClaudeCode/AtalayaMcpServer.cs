@@ -287,7 +287,9 @@ public sealed class AtalayaMcpServer
             tools.Add(new JsonObject
             {
                 ["name"] = tool.Name,
-                ["description"] = tool.Description,
+                // PROV-2 §3 — la descripción es la compartida, y la terminalidad la añade con
+                // palabras el transporte, que es quien no tiene otra forma de decirla.
+                ["description"] = McpTerminal.Describe(tool),
                 ["inputSchema"] = tool.InputSchema.DeepClone(),
             });
         }

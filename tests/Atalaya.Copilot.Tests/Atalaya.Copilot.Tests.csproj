@@ -19,6 +19,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Atalaya.Copilot\Atalaya.Copilot.csproj" />
+    <!-- PROV-2 §3 — la OTRA casa, para poder comparar los dos catálogos de herramientas ENTRE SÍ.
+         Compararlos contra una lista escrita a mano es lo que dejó divergir `unit_done`. -->
+    <ProjectReference Include="..\..\src\Atalaya.ClaudeCode\Atalaya.ClaudeCode.csproj" />
     <ProjectReference Include="..\..\src\Atalaya.Domain\Atalaya.Domain.csproj" />
   </ItemGroup>
 

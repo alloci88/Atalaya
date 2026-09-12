@@ -222,9 +222,10 @@ public sealed partial class SettingsViewModel : ViewModelBase
             Providers.Add(new ProviderOption(provider.ProviderId, provider.ProviderName));
         }
 
-        _selectedModelId = _selectedProviderId.Length > 0
-            ? settings.ModelFor(_selectedProviderId)
-            : s.CopilotModel;
+        // PROV-2 §2 — el modelo es el DE ESE proveedor, buscado por su identificador. Cuando la
+        // página se monta sin registro —los tests que solo ejercitan los ajustes numéricos—, el
+        // proveedor es el que se inyectó: ya no hay «el campo de Copilot» al que caer.
+        _selectedModelId = settings.ModelFor(ModelOwnerId);
 
         // Hasta que el proveedor conteste, el desplegable enseña el modelo configurado: así nunca
         // está vacío ni «elige» en silencio uno distinto del que se está usando.
@@ -559,6 +560,14 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private IAuditorProvider CurrentProvider
         => _providers is null ? _agent : _providers.ById(SelectedProviderId);
 
+    /// <summary>
+    /// <b>De quién es el modelo que esta página edita</b> (PROV-2 §2): la clave con la que se lee
+    /// y se guarda en <c>AppSettings.ProviderModels</c>. Es el identificador que declara el propio
+    /// proveedor, nunca el nombre de un campo suyo — que es lo que permitía que el modelo de una
+    /// casa acabara guardado encima del de otra.
+    /// </summary>
+    private string ModelOwnerId => CurrentProvider.ProviderId;
+
     public override Task LoadAsync() => RefreshModels();
 
     /// <summary>
@@ -660,22 +669,16 @@ public sealed partial class SettingsViewModel : ViewModelBase
             s.AuditorProvider = SelectedProviderId;
         }
 
-        // El modelo se guarda en el campo de SU proveedor: guardar el de Claude Code encima del de
-        // Copilot dejaría a la otra casa con un id que no reconoce.
-        if (!string.IsNullOrWhiteSpace(SelectedModelId))
+        // El modelo se guarda en la entrada de SU proveedor: guardar el de una casa encima del de
+        // otra la dejaría con un id que no reconoce.
+        //
+        // PROV-2 §2 — aquí estaba REPETIDO el `switch` de SettingsService, y con el mismo defecto:
+        // todo lo que no fuera Claude Code caía en el campo de Copilot, así que un tercer
+        // proveedor se guardaba encima del suyo. Ahora la clave es el identificador y el criterio
+        // vive en el servicio, que es donde estaba escrito que viviera.
+        if (!string.IsNullOrWhiteSpace(SelectedModelId) && ModelOwnerId.Length > 0)
         {
-            if (string.IsNullOrWhiteSpace(SelectedProviderId))
-            {
-                s.CopilotModel = SelectedModelId.Trim();
-            }
-            else if (string.Equals(SelectedProviderId, "claude-code", StringComparison.OrdinalIgnoreCase))
-            {
-                s.ClaudeCodeModel = SelectedModelId.Trim();
-            }
-            else
-            {
-                s.CopilotModel = SelectedModelId.Trim();
-            }
+            s.ProviderModels[ModelOwnerId] = SelectedModelId.Trim();
         }
         s.CopilotTimeoutMinutes = Floor(
             CopilotTimeoutMinutes, SettingsLimits.MinCopilotTimeoutMinutes,

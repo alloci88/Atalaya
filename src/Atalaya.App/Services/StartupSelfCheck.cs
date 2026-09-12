@@ -141,6 +141,12 @@ public static class StartupSelfCheck
                 settings.MigrateConnection(host.Services.GetRequiredService<DeployConfig>());
                 settings.MigrateAssistedFixDefault();
                 settings.MigrateSweepCapDefault();
+                // PROV-2 §2 — las casas, igual que en el arranque de verdad: el chequeo pinta la
+                // primera vista, y una vista que nombre un proveedor tiene que nombrarlo como lo
+                // nombraría la aplicación. Dos formas de arrancar serían dos grafos que divergen.
+                var providers = host.Services.GetRequiredService<AuditorProviderRegistry>();
+                ProviderNames.Seed(providers.All);
+                settings.AdoptLegacyProviderModels(providers.All);
                 return $"tema «{settings.Current.Theme}»";
             });
 

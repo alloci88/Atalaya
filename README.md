@@ -98,10 +98,13 @@ normal. Ahí mismo hay un override de la URL del hub, **solo para desarrollo**.
   Editable en **Ajustes → Umbrales**. La app repite la revisión hasta que una pasada queda
   *seca*; con tope **1** cada auditoría es una pasada única. Si se agota sin secarse, la unidad
   se cierra como *«cobertura posiblemente incompleta»* — visible en el veredicto y en el informe.
-- `copilotModel` (por defecto **`gpt-5`**): modelo con el que corren las sesiones nuevas.
-  El desplegable de **Ajustes** se puebla con lo que el SDK lista para **tu** cuenta (con su
+- `providerModels` (por defecto **vacío**): el modelo con el que corren las sesiones nuevas de
+  **cada proveedor**, indexado por su identificador (`{"copilot": "gpt-5", "claude-code": "opus"}`).
+  El desplegable de **Ajustes** se puebla con lo que el proveedor lista para **tu** cuenta (con su
   multiplicador de coste cuando lo publica); si no se puede consultar, se muestra el configurado
-  con un aviso. El modelo en uso queda registrado en la sesión y en su informe.
+  con un aviso. El modelo en uso queda registrado en la sesión y en su informe. Las máquinas que
+  vengan de una versión anterior traen su modelo en `copilotModel` y `claudeCodeModel`: la
+  aplicación los adopta al arrancar, una sola vez, sin perder ninguna elección.
 
 Los secretos **no** están aquí: la cuenta vive cifrada con DPAPI en
 `%LOCALAPPDATA%/Atalaya/auth.dat`, y nunca sale de tu máquina.
