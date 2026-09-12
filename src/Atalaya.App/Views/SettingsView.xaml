@@ -349,27 +349,37 @@
                                 ToolTip="El aviso y la acción viven con la aplicación: su tarjeta dice cuántas sesiones sin coste tiene, y el resumen de su ciclo lleva a reconciliarlas."
                                 Visibility="{Binding Rates.HasMissing, Converter={StaticResource BoolToVisibility}}" />
 
-                        <!-- EN ESTRECHO, LA TABLA SE DESPLAZA; las cabeceras no se recortan nunca.
-                             El ancho de la rejilla sigue al del hueco visible —así las columnas
-                             reparten cuando sobra— pero no baja de su mínimo: por debajo aparece la
-                             barra horizontal, que es «reorganizar» en una tabla (principio 1). La
-                             cabecera va DENTRO del mismo desplazamiento, o se separaría de sus
-                             columnas al primer arrastre. -->
+                        <!-- EL MÍNIMO ES LO QUE LAS SIETE COLUMNAS PIDEN, MEDIDO (R-PROV2).
+                             Valía 1.080 y el hueco de la columna de contenido son 950: la tabla no
+                             cabía nunca, y la barra horizontal que salía cuelga del BORDE INFERIOR
+                             de la rejilla —o sea, debajo de las 31 tarifas—, así que para llegar a
+                             la última columna había que bajar hasta el final y volver. Medido con la
+                             fuente y los tamaños de Tokens, lo que cada columna necesita de verdad
+                             es 101 · 140 · 102 · 102 · 105 · 116 y lo que quede para la nota: **666
+                             más la nota**, no 1.080. Los pesos reparten en esa proporción y el
+                             mínimo baja a 870, así que a tamaño de diseño la tabla se ve ENTERA y no
+                             hay barra.
+
+                             Se conserva el desplazamiento propio para lo estrecho —a 1280 el hueco
+                             son ~734 y no caben, y eso es «reorganizar» en una tabla (D-944)—, y la
+                             cabecera va DENTRO de él, o se separaría de sus columnas al primer
+                             arrastre. Ninguna columna se recorta ni siquiera en el mínimo: cada
+                             MinWidth es su medida más su relleno. -->
                         <Border Grid.Row="4" Style="{StaticResource Panel}"
                                 Visibility="{Binding CanManageRates, Converter={StaticResource BoolToVisibility}}">
                             <ScrollViewer Style="{StaticResource Scroll}" x:Name="RatesScroll"
                                           HorizontalScrollBarVisibility="Auto"
                                           VerticalScrollBarVisibility="Disabled">
-                                <Grid MinWidth="1080"
+                                <Grid MinWidth="870"
                                       Width="{Binding ViewportWidth, ElementName=RatesScroll}">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="1.5*" MinWidth="170" />
-                                        <ColumnDefinition Width="2*" MinWidth="220" />
-                                        <ColumnDefinition Width="1*" MinWidth="110" />
-                                        <ColumnDefinition Width="1*" MinWidth="110" />
-                                        <ColumnDefinition Width="1*" MinWidth="130" />
-                                        <ColumnDefinition Width="1*" MinWidth="140" />
-                                        <ColumnDefinition Width="2*" MinWidth="200" />
+                                        <ColumnDefinition Width="1.05*" MinWidth="105" />
+                                        <ColumnDefinition Width="1.45*" MinWidth="145" />
+                                        <ColumnDefinition Width="1.05*" MinWidth="105" />
+                                        <ColumnDefinition Width="1.05*" MinWidth="105" />
+                                        <ColumnDefinition Width="1.1*" MinWidth="110" />
+                                        <ColumnDefinition Width="1.2*" MinWidth="120" />
+                                        <ColumnDefinition Width="2*" MinWidth="180" />
                                     </Grid.ColumnDefinitions>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
@@ -426,13 +436,13 @@
                                                         BorderThickness="{StaticResource Border.Bottom}">
                                                     <Grid>
                                                         <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="1.5*" MinWidth="170" />
-                                                            <ColumnDefinition Width="2*" MinWidth="220" />
-                                                            <ColumnDefinition Width="1*" MinWidth="110" />
-                                                            <ColumnDefinition Width="1*" MinWidth="110" />
-                                                            <ColumnDefinition Width="1*" MinWidth="130" />
-                                                            <ColumnDefinition Width="1*" MinWidth="140" />
-                                                            <ColumnDefinition Width="2*" MinWidth="200" />
+                                                            <ColumnDefinition Width="1.05*" MinWidth="105" />
+                                                            <ColumnDefinition Width="1.45*" MinWidth="145" />
+                                                            <ColumnDefinition Width="1.05*" MinWidth="105" />
+                                                            <ColumnDefinition Width="1.05*" MinWidth="105" />
+                                                            <ColumnDefinition Width="1.1*" MinWidth="110" />
+                                                            <ColumnDefinition Width="1.2*" MinWidth="120" />
+                                                            <ColumnDefinition Width="2*" MinWidth="180" />
                                                         </Grid.ColumnDefinitions>
                                                         <TextBox Grid.Column="0" Text="{Binding Provider}"
                                                                  Style="{StaticResource Field.Cell}" />
