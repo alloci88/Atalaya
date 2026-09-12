@@ -8,7 +8,6 @@ using Atalaya.Domain.Model;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
-using Atalaya.Copilot;
 
 namespace Atalaya.App.ViewModels;
 

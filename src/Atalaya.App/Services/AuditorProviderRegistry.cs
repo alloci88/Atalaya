@@ -1,4 +1,3 @@
-using Atalaya.Copilot;
 using Atalaya.Domain.Model;
 
 namespace Atalaya.App.Services;
@@ -18,7 +17,7 @@ namespace Atalaya.App.Services;
 /// Por eso <see cref="Current"/> es una propiedad que RELEE los ajustes cada vez, y no un campo.
 /// </para>
 /// </summary>
-public sealed class AuditorProviderRegistry
+public sealed class AuditorProviderRegistry : IAsyncDisposable
 {
     private readonly IReadOnlyList<IAuditorProvider> _providers;
     private readonly SettingsService? _settings;
@@ -163,5 +162,34 @@ public sealed class AuditorProviderRegistry
                // F16: y si esta versión ya no lo trae, el mapa de lectura del histórico sabe
                // nombrarlo igual que lo nombran los informes. Un solo texto por casa.
                ?? ProviderNames.Display(providerId);
+    }
+
+    /// <summary>
+    /// <b>Cierra a los proveedores que lo necesiten</b> (PROV-2 §1).
+    /// <para>
+    /// Hasta aquí cada proveedor se registraba por su cuenta en el contenedor, y era el contenedor
+    /// quien los liberaba al cerrar. Desde que los monta <c>Atalaya.Providers</c>, el contenedor
+    /// solo conoce ESTE objeto —los proveedores los creó otro—, así que el cierre tiene que bajar
+    /// por aquí. Si no bajara, volvería BUGFIX-CIERRE: el runtime del proveedor se queda vivo con
+    /// sus tuberías abiertas y <c>Atalaya.exe</c> no termina al cerrar la ventana (D-085, D-086).
+    /// </para>
+    /// <para>
+    /// Se libera lo que se declare liberable y nada más: un doble de test no tiene por qué serlo.
+    /// </para>
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        foreach (IAuditorProvider provider in _providers)
+        {
+            switch (provider)
+            {
+                case IAsyncDisposable async:
+                    await async.DisposeAsync();
+                    break;
+                case IDisposable sync:
+                    sync.Dispose();
+                    break;
+            }
+        }
     }
 }

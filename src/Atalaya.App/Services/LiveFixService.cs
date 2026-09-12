@@ -1,7 +1,6 @@
 ﻿using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Threading;
-using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Hashing;
 using Atalaya.Domain.Ids;
@@ -403,7 +402,10 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
                 ModelResolution resolution = await _models.ResolveAsync(CancellationToken.None);
                 if (resolution.Failed)
                 {
-                    Fail(resolution.Notice ?? CopilotHelp.ModelUnavailable(null), offersModelChange: true);
+                    Fail(
+                        // PROV-2 §1: igual que en la sesion, el aviso nombra al proveedor activo.
+                        resolution.Notice ?? AuditorHelp.ModelUnavailableFor(_agent.ProviderName, null),
+                        offersModelChange: true);
                     return;
                 }
 
@@ -509,7 +511,7 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         catch (Exception ex)
         {
             Fail($"El arreglo se ha interrumpido por un error: {ex.Message}",
-                offersModelChange: false, CopilotFailure.Raw(ex));
+                offersModelChange: false, AuditorHelp.RawFailure(ex));
         }
         finally
         {

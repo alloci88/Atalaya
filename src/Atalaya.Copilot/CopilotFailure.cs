@@ -128,27 +128,13 @@ public static class CopilotFailure
     /// El error del proveedor tal cual, con el tipo delante y la cadena de causas detrás. Es lo que
     /// se copia y se le pega a quien administra la organización: el Request ID de GitHub va aquí
     /// dentro, y es lo único con lo que ellos pueden buscar la petición concreta.
+    /// <para>
+    /// <b>El formato no es de esta casa</b> (PROV-2 §1): lo escribe <see cref="AuditorHelp.RawFailure"/>,
+    /// que es donde lo encuentran los caminos que no tienen proveedor delante. Aquí queda el nombre
+    /// con el que lo llama quien sí lo tiene.
+    /// </para>
     /// </summary>
-    public static string Raw(Exception? ex)
-    {
-        if (ex is null)
-        {
-            return string.Empty;
-        }
-
-        var sb = new StringBuilder();
-        for (Exception? e = ex; e is not null; e = e.InnerException)
-        {
-            if (sb.Length > 0)
-            {
-                sb.Append(" ← ");
-            }
-
-            sb.Append(e.GetType().Name).Append(": ").Append(e.Message?.Trim());
-        }
-
-        return sb.ToString();
-    }
+    public static string Raw(Exception? ex) => AuditorHelp.RawFailure(ex);
 
     /// <summary>La cuota agotada, que es el caso que nació mal clasificado.</summary>
     public static bool IsQuota(Exception? ex) => IsQuota(Searchable(ex));

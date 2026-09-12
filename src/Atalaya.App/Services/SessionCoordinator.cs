@@ -1,5 +1,4 @@
 ﻿using Atalaya.ClaudeCode;
-using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Anchoring;
 using Atalaya.Domain.Hashing;

@@ -1,5 +1,4 @@
 using System.Globalization;
-using Atalaya.Copilot;
 using Atalaya.Domain.Model;
 
 namespace Atalaya.App.Services;

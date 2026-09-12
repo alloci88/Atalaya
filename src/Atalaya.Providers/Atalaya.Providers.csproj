@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Atalaya.Providers</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- PROV-2 (comportamiento 1) — EL UNICO sitio del arbol que conoce a las dos casas a la vez.
+         Aqui se referencian los proveedores porque este proyecto existe para montarlos; la
+         aplicacion referencia ESTE y no aquellos, y por eso puede aparecer un tercero sin que
+         Atalaya.App cambie una linea. -->
+    <ProjectReference Include="..\Atalaya.Agents\Atalaya.Agents.csproj" />
+    <ProjectReference Include="..\Atalaya.ClaudeCode\Atalaya.ClaudeCode.csproj" />
+    <ProjectReference Include="..\Atalaya.Copilot\Atalaya.Copilot.csproj" />
+  </ItemGroup>
+
+</Project>

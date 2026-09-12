@@ -1,4 +1,4 @@
-namespace Atalaya.Copilot;
+namespace Atalaya.Agents;
 
 /// <summary>
 /// Los criterios de severidad, en UN solo sitio versionado (F12 §D).

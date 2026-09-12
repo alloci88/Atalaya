@@ -1,7 +1,6 @@
 ﻿using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Threading;
-using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Model;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -662,7 +661,11 @@ public sealed partial class LiveSessionService : ObservableObject
                 ModelResolution resolution = await _models.ResolveAsync(CancellationToken.None);
                 if (resolution.Failed)
                 {
-                    Fail(resolution.Notice ?? CopilotHelp.ModelUnavailable(null), offersModelChange: true);
+                    Fail(
+                        // PROV-2 §1: el aviso nombra a QUIEN ha rechazado el modelo. Se pedia a la
+                        // ayuda de una casa concreta aunque la sesion fuera de la otra.
+                        resolution.Notice ?? AuditorHelp.ModelUnavailableFor(_agent().ProviderName, null),
+                        offersModelChange: true);
                     return;
                 }
 
@@ -725,7 +728,7 @@ public sealed partial class LiveSessionService : ObservableObject
         {
             // Ni siquiera es del proveedor. Se enseña el crudo: inventar una causa es peor.
             Fail($"La sesión se ha interrumpido por un error: {ex.Message}",
-                offersModelChange: false, CopilotFailure.Raw(ex));
+                offersModelChange: false, AuditorHelp.RawFailure(ex));
         }
         finally
         {

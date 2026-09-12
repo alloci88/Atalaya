@@ -2,7 +2,7 @@
 using Atalaya.Domain;
 using Atalaya.Domain.Model;
 
-namespace Atalaya.Copilot;
+namespace Atalaya.Agents;
 
 /// <summary>
 /// El brief del auditor, partido por donde se mide (F18 §1). Las dos piezas siempre viajan

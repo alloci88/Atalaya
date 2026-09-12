@@ -1,4 +1,3 @@
-using Atalaya.Copilot;
 using Atalaya.Storage.Sync;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -428,8 +427,9 @@ public sealed class ConnectionChecker
     /// <summary>
     /// Sin identidad no se puede comprobar nada más: el resto de filas se marcan como no aplicables.
     /// <para>
-    /// <b>Se calcula, no se enumera.</b> Antes eran tres claves escritas a mano —incluida
-    /// <c>"copilot"</c>—, y al pasar a una fila por proveedor esa clave dejó de existir: la pantalla
+    /// <b>Se calcula, no se enumera.</b> Antes eran tres claves escritas a mano —una de ellas, el
+    /// identificador del proveedor de fábrica—, y al pasar a una fila por proveedor esa clave dejó
+    /// de existir: la pantalla
     /// Cuenta reventaba con «Sequence contains no matching element» en el caso más común de todos,
     /// abrirla sin cuenta conectada. Una lista de claves paralela a las filas es una lista que se
     /// queda vieja; se recorre lo que hay.

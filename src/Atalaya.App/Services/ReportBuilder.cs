@@ -4,7 +4,6 @@ using Atalaya.Domain;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 
-using Atalaya.Copilot;
 using Atalaya.App;
 
 namespace Atalaya.App.Services;

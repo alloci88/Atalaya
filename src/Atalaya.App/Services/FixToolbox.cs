@@ -1,5 +1,4 @@
 using System.Text;
-using Atalaya.Copilot;
 
 namespace Atalaya.App.Services;
 

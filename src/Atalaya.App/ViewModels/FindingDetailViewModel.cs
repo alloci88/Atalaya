@@ -2,7 +2,6 @@
 using System.Windows;
 using Atalaya.App.Services;
 using Atalaya.App.Views;
-using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
@@ -642,7 +641,7 @@ public sealed partial class FindingDetailViewModel : ViewModelBase, IAppScoped
         }
 
         Severity = Finding.Severity;
-        RuleText = Atalaya.Copilot.RuleCatalog.Find(Finding.RuleId)?.Look ?? string.Empty;
+        RuleText = RuleCatalog.Find(Finding.RuleId)?.Look ?? string.Empty;
 
         // F33 — arreglar no resuelve (D-557): un arreglo sin veredicto después sigue pidiendo una
         // verificación aunque el ancla esté intacta, así que el botón tiene que enterarse.
@@ -723,7 +722,7 @@ public sealed partial class FindingDetailViewModel : ViewModelBase, IAppScoped
             "Origen", AuditModeNames.Display(f.Origin),
             "La clase de sesión en la que se detectó."));
         Meta.Add(new MetaRow(
-            "Temática", Copilot.ThemeCatalog.Display(f.Theme),
+            "Temática", ThemeCatalog.Display(f.Theme),
             "La lupa del ciclo que lo detectó. Solo un ciclo General o uno de esta misma temática "
             + "lo reconcilia; durante un ciclo de otra temática envejece sin que nadie lo mire."));
         Meta.Add(new MetaRow("Primera detección", Stamp(f.FirstDetected)));

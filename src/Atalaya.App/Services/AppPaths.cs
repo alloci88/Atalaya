@@ -18,8 +18,16 @@ public sealed class AppPaths
 
     public string Logs => Path.Combine(Root, "logs");
 
-    /// <summary>Copilot SDK base directory (§6.1).</summary>
-    public string Copilot => Path.Combine(Root, "copilot");
+    /// <summary>
+    /// La carpeta propia de UN proveedor, con su identificador por nombre (PROV-2 §1). Aquí
+    /// escribe lo suyo —su configuración de herramientas, su prompt de sistema— y nadie más.
+    /// <para>
+    /// Antes había una propiedad por casa, con el nombre de la casa escrito a mano; eso obligaba a
+    /// tocar esta clase cada vez que apareciera un proveedor. El identificador ya es único y ya lo
+    /// declara cada proveedor, así que sirve de nombre de carpeta sin inventar un mapa aparte.
+    /// </para>
+    /// </summary>
+    public string ForProvider(string providerId) => Path.Combine(Root, providerId);
 
     /// <summary>Machine-local config: clone paths per app (§4).</summary>
     public string MachinesJson => Path.Combine(Root, "machines.json");
