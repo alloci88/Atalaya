@@ -881,7 +881,7 @@ Se regenera de `DECISIONS.md`, y ante contradicción **manda `DECISIONS.md`**.
 ## Tests, bancos y CI
 
 - Build incremental 1,81 s y suite entera 80,10 s de reloj, con 2.772 tests en verde. (A1)
-- El `dist` de `scripts/publish.ps1` tarda 9,17 s y `Atalaya.exe --selfcheck` 1,04 s con once comprobaciones. (A1)
+- El `dist` de `scripts/publish.ps1` tarda 9,17 s y `Atalaya.exe --selfcheck` 1,04 s con diez comprobaciones. (A1, PROV-2)
 - El 69,6 % del tiempo de la suite está en ficheros que montan repositorios git; los 1.449 unitarios puros suman 55,81 s. (A1)
 - `Atalaya.App.Tests` es el 80,7 % de los tests y el 84,7 % del tiempo; diez clases de 199 son la mitad. (A1)
 - `FactoryResetTests` son 14 tests y 72,36 s, el 24 % del tiempo acumulado, con dos tests sueltos en 64 s. (A1)

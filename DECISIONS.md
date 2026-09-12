@@ -19771,6 +19771,6 @@ corrieron M1 y M2—, e **`IAssistedFixProvider` hereda de `IAuditorProvider`**:
 **método** `FixAsync`, con implementación por defecto que lanza, no el tipo; esta entrega **no toca
 la jerarquía**. **20 tests añadidos y 9 reescritos a la regla nueva** —ninguno borrado sin
 sustituto— más una treintena adaptados de firma sin cambiar lo que prueban; la suite queda en
-**2.789** en verde, con `dist` publicado y `--selfcheck` en 0 con sus once comprobaciones. Sesión
+**2.789** en verde, con `dist` publicado y `--selfcheck` en 0 —**diez** comprobaciones, no las once que ESTADO le atribuye desde A1. Sesión
 **de 13:24 a 15:25 del 2026-09-12, 2 horas**, cinco agentes de área en paralelo y un integrador.
 Ningún proveedor nuevo entra hoy: lo que entra es la puerta.
