@@ -32,9 +32,15 @@ public sealed class CurrencyCollection
 /// aplicación— no puede convivir con otra que lea <c>Application.Current</c> desde su propio hilo:
 /// lo que sale de ahí no es un rojo, es un bloqueo, y el conjunto se queda colgado.
 /// </para>
+/// <para>
+/// Y por eso la colección trae <see cref="WpfUiThread"/> como fixture: xUnit lo construye antes
+/// que cualquier test de aquí, así que la <see cref="System.Windows.Application"/> nace SIEMPRE en
+/// el mismo hilo STA con su despachador bombeando — y quien la encuentre hecha se la encuentra
+/// viva, no clavada en un hilo del pool que ya no atiende a nadie.
+/// </para>
 /// </summary>
 [CollectionDefinition(Name, DisableParallelization = true)]
-public sealed class AppCollection
+public sealed class AppCollection : ICollectionFixture<WpfUiThread>
 {
     public const string Name = "aplicación";
 }

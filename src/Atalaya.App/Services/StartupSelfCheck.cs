@@ -208,19 +208,48 @@ public static class StartupSelfCheck
         var shell = services.GetRequiredService<ViewModels.MainViewModel>();
         var page = services.GetRequiredService<ViewModels.PortfolioViewModel>();
 
+        PaintPage(page);
+
+        _ = shell;
+        return $"Portafolio, medido y colocado a {PaintWidth:0}×{PaintHeight:0}";
+    }
+
+    /// <summary>Lo que mide una página al pintarse aquí: una ventana de trabajo corriente.</summary>
+    public const double PaintWidth = 1440;
+
+    /// <inheritdoc cref="PaintWidth"/>
+    public const double PaintHeight = 900;
+
+    /// <summary>
+    /// <b>PINTA UNA PÁGINA</b>: la mete en un <c>ContentControl</c> suelto —que es lo que hace que
+    /// la plantilla de <c>Themes/Pages.xaml</c> resuelva su vista— y le pide una medida y una
+    /// colocación a <see cref="PaintWidth"/>×<see cref="PaintHeight"/>. No se enseña ninguna
+    /// ventana.
+    /// <para>
+    /// <b>Por qué medir y no solo construir.</b> Instanciar un view-model no toca el XAML, y
+    /// resolver la vista tampoco basta: las plantillas se aplican al MEDIR
+    /// (<c>MeasureCore</c> → <c>ApplyTemplate</c>), y es ahí donde revientan un estilo que hereda
+    /// de otro declarado más abajo (F27) o un <c>SharedSizeGroup</c> cuyo nombre no es un
+    /// identificador. Nada de eso lo ve el compilador.
+    /// </para>
+    /// <para>
+    /// Es <b>público</b> porque lo reusa la prueba que barre TODAS las vistas del raíl
+    /// (<c>RailViewsPaintTests</c>): si el barrido pintara a su manera, dejaría de decir nada sobre
+    /// lo que hace el autochequeo — y el hueco se abriría justo entre los dos.
+    /// </para>
+    /// </summary>
+    public static void PaintPage(object page)
+    {
         var host = new System.Windows.Controls.ContentControl
         {
             Content = page,
-            Width = 1440,
-            Height = 900,
+            Width = PaintWidth,
+            Height = PaintHeight,
         };
 
-        host.Measure(new System.Windows.Size(1440, 900));
-        host.Arrange(new System.Windows.Rect(0, 0, 1440, 900));
+        host.Measure(new System.Windows.Size(PaintWidth, PaintHeight));
+        host.Arrange(new System.Windows.Rect(0, 0, PaintWidth, PaintHeight));
         host.UpdateLayout();
-
-        _ = shell;
-        return "Portafolio, medido y colocado a 1440×900";
     }
 
     /// <summary>
