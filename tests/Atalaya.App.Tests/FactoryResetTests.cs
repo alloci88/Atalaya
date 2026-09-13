@@ -65,7 +65,10 @@ public sealed class FactoryResetTests : IDisposable
         NullLoggerFactory.Instance);
 
     private FactoryResetService Reset(HubContext hub)
-        => new(hub, _paths, _settings, _account, _openSession);
+        => new(hub, _paths, _settings, _account, _openSession, Secrets);
+
+    /// <summary>El almacén de claves de API: PROV-3 §3 lo mete en lo que el reset se lleva.</summary>
+    private ProviderSecretStore Secrets => new(_paths);
 
     /// <summary>Una app con traza real: hallazgos, sesión, informe y ruta de clon en esta máquina.</summary>
     private void SeedApp(HubContext hub, string slug, string name)

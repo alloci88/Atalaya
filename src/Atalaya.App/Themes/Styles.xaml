@@ -1607,6 +1607,27 @@
         <Setter Property="HorizontalAlignment" Value="Left" />
     </Style>
 
+    <!-- LA CAJA DE TEXTO LIBRE DE UN FORMULARIO (PROV-3 §2). El mismo ancho y el mismo alto que
+         el desplegable y que la caja numérica: R-AJUSTES dejó UN ancho de control en Ajustes, y
+         un campo nuevo que se pusiera el suyo volvería a partir la columna en dos bordes
+         derechos. Es `ui:TextBox` —y no el de fábrica— porque lo que estos campos necesitan es
+         HUECO: la URL de ejemplo se enseña en el hueco y no como valor, que es lo que impide
+         apuntar a una casa de pago sin querer. `BasedOn` obligatorio (D-1006). -->
+    <Style x:Key="Field.Text" TargetType="ui:TextBox" BasedOn="{StaticResource {x:Type ui:TextBox}}">
+        <Setter Property="MinWidth" Value="{StaticResource Field.SelectWidth}" />
+        <Setter Property="Height" Value="{StaticResource Control.MinHeight}" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+
+    <!-- Y LA DE UN SECRETO (PROV-3 §3). Mide igual que las demás —una clave no es un campo
+         especial en la rejilla— y lo único que cambia es que no se lee: lo que se escribe aquí va
+         al almacén cifrado de la máquina y nunca a `settings.json`. -->
+    <Style x:Key="Field.Secret" TargetType="ui:PasswordBox" BasedOn="{StaticResource {x:Type ui:PasswordBox}}">
+        <Setter Property="MinWidth" Value="{StaticResource Field.SelectWidth}" />
+        <Setter Property="Height" Value="{StaticResource Control.MinHeight}" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+
     <!-- ================================================================ La lista de secciones
 
          El raíl de segundo nivel de Ajustes. Comparte la gramática del de primero —barra de «estás

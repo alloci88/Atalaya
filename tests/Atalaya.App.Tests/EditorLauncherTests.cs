@@ -260,7 +260,8 @@ public sealed class EditorLauncherTests : IDisposable
             new Atalaya.Copilot.FakeCopilotAgent(),
             toasts ?? new ToastCenter(),
             new FactoryResetService(
-                hub, _paths, _settings, TestFactory.Account(_paths), new OpenSessionStore(_paths)),
+                hub, _paths, _settings, TestFactory.Account(_paths), new OpenSessionStore(_paths),
+                new ProviderSecretStore(_paths)),
             new NoReset(),
             hub,
             new NavigationService(new NoServices()),
