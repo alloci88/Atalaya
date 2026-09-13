@@ -12,6 +12,7 @@
          Atalaya.App cambie una linea. -->
     <ProjectReference Include="..\Atalaya.Agents\Atalaya.Agents.csproj" />
     <ProjectReference Include="..\Atalaya.ClaudeCode\Atalaya.ClaudeCode.csproj" />
+    <ProjectReference Include="..\Atalaya.OpenAI\Atalaya.OpenAI.csproj" />
     <ProjectReference Include="..\Atalaya.Copilot\Atalaya.Copilot.csproj" />
   </ItemGroup>
 

@@ -323,6 +323,30 @@ public sealed class AppSettings
             : new Dictionary<string, string>(value, StringComparer.OrdinalIgnoreCase);
     }
 
+    private Dictionary<string, string> _providerOptions = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// <b>Lo demás que un proveedor necesita de esta máquina</b> (PROV-3 §2), indexado por
+    /// <c>{identificador}.{ajuste}</c>: la URL base de un endpoint, cómo presenta su clave.
+    /// <para>
+    /// Un saco y no un campo por cosa, por lo mismo que <see cref="ProviderModels"/>: una casa por
+    /// API necesita datos que ni un proveedor de asiento ni uno de CLI necesitan, y un campo con el
+    /// nombre de cada uno acabaría con un <c>AppSettings</c> que enumera las casas.
+    /// </para>
+    /// <para>
+    /// <b>Aquí no cabe un secreto.</b> Esto es texto plano; la clave va a
+    /// <see cref="ProviderSecretStore"/>, cifrada, y por eso la costura las pide por caminos
+    /// distintos.
+    /// </para>
+    /// </summary>
+    public Dictionary<string, string> ProviderOptions
+    {
+        get => _providerOptions;
+        set => _providerOptions = value is null
+            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, string>(value, StringComparer.OrdinalIgnoreCase);
+    }
+
     private Dictionary<string, string> _providerModels = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
@@ -659,6 +683,47 @@ public sealed class SettingsService
     /// </para>
     /// </summary>
     /// <returns>Si hubo algo que adoptar, y por tanto se escribió.</returns>
+    /// <summary>
+    /// Un ajuste de ese proveedor, o null si no está puesto (PROV-3 §2). La clave del mapa la
+    /// compone esta función —<c>{identificador}.{ajuste}</c>— para que nadie de fuera tenga que
+    /// saber cómo se guarda.
+    /// </summary>
+    public string? ProviderOption(string providerId, string key)
+    {
+        string k = OptionKey(providerId, key);
+        return k.Length > 0 && Current.ProviderOptions.TryGetValue(k, out string? value)
+               && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : null;
+    }
+
+    /// <summary>Guarda —o borra, con vacío— un ajuste de ese proveedor.</summary>
+    public void SetProviderOption(string providerId, string key, string? value)
+    {
+        string k = OptionKey(providerId, key);
+        if (k.Length == 0)
+        {
+            return;
+        }
+
+        AppSettings settings = Current;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            settings.ProviderOptions.Remove(k);
+        }
+        else
+        {
+            settings.ProviderOptions[k] = value.Trim();
+        }
+
+        Save(settings);
+    }
+
+    private static string OptionKey(string providerId, string key)
+        => string.IsNullOrWhiteSpace(providerId) || string.IsNullOrWhiteSpace(key)
+            ? string.Empty
+            : providerId.Trim() + "." + key.Trim();
+
     public bool AdoptLegacyProviderModels(IEnumerable<IAuditorProvider> providers)
     {
         IReadOnlyDictionary<string, string> legacy = ReadRawStrings();

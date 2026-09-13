@@ -288,6 +288,8 @@ public partial class App : Application
         // F26 §A — en qué aplicación estás. Singleton porque es memoria compartida de la ventana:
         // si cada vista tuviera la suya, el raíl volvería a no saber a qué inventario llevar.
         services.AddSingleton<ActiveApp>();
+        // PROV-3 §3: las claves de API, cifradas con DPAPI de usuario y fuera de `settings.json`.
+        services.AddSingleton(sp => new ProviderSecretStore(paths));
         services.AddSingleton(sp => new MachineConfigStore(paths.MachinesJson));
         services.AddSingleton<InventoryScanner>();
         // F7: el escaneo de directivas es un recorrido distinto del árbol, con su propio catálogo.
@@ -317,6 +319,7 @@ public partial class App : Application
             var settings = sp.GetRequiredService<SettingsService>();
             var account = sp.GetRequiredService<GitHubAccountService>();
             var loggers = sp.GetRequiredService<ILoggerFactory>();
+            var secrets = sp.GetRequiredService<ProviderSecretStore>();
 
             // Todo son FUNCIONES, y se leen en cada uso, por lo de BUGFIX-AJUSTES: capturar aquí
             // el modelo o el plazo obligaba a reiniciar para que cambiarlos en Ajustes sirviera.
@@ -335,7 +338,12 @@ public partial class App : Application
                 AccountDirectory: () => settings.Current.CopilotBaseDirectory,
                 // El puente MCP viaja en la carpeta de la aplicación (ver el .csproj).
                 BridgeExecutable: () => McpBridge.ResolvePath(),
-                Logger: providerId => loggers.CreateLogger(providerId));
+                Logger: providerId => loggers.CreateLogger(providerId),
+                // PROV-3 §2: lo que una casa necesita de esta máquina y no es su modelo. La
+                // aplicación guarda y devuelve un par nombre-valor sin saber qué significa.
+                Setting: (providerId, key) => settings.ProviderOption(providerId, key),
+                // §3: y el secreto, por otro camino, para que no pueda acabar en `settings.json`.
+                Secret: secrets.Get);
 
             // El registro los TIENE: el contenedor lo libera a él al cerrar, y él a ellos. Sin
             // eso, el runtime del proveedor se quedaba vivo con sus tuberías abiertas y el

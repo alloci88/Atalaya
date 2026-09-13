@@ -1,6 +1,7 @@
 using Atalaya.Agents;
 using Atalaya.ClaudeCode;
 using Atalaya.Copilot;
+using Atalaya.OpenAI;
 
 namespace Atalaya.Providers;
 
@@ -57,6 +58,18 @@ public static class AuditorProviders
             workDirectory: () => host.WorkDirectory(ClaudeCodeProvider.Id),
             logger: host.Logger(ClaudeCodeProvider.Id));
 
-        return new IAuditorProvider[] { copilot, claudeCode };
+        // PROV-3: el primero por API. No hay nada que instalar ni ningún login de máquina — una
+        // URL, un modelo y una clave—, y con eso habla con las siete casas que usan este dialecto,
+        // las locales incluidas. Va el último porque es el que hay que configurar; los dos de
+        // arriba funcionan con lo que la máquina ya tiene.
+        var openAi = new OpenAiCompatibleProvider(
+            endpoint: () => new OpenAiEndpoint(
+                BaseUrl: host.Setting(OpenAiCompatibleProvider.Id, OpenAiSettingKeys.BaseUrl) ?? string.Empty,
+                Model: host.Model(OpenAiCompatibleProvider.Id) ?? string.Empty,
+                Auth: OpenAiSettingKeys.AuthOf(host.Setting(OpenAiCompatibleProvider.Id, OpenAiSettingKeys.Auth))),
+            key: () => host.Secret(OpenAiCompatibleProvider.Id),
+            logger: host.Logger(OpenAiCompatibleProvider.Id));
+
+        return new IAuditorProvider[] { copilot, claudeCode, openAi };
     }
 }

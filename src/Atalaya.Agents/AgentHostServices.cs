@@ -57,6 +57,17 @@ namespace Atalaya.Agents;
 /// Dónde escribe ese proveedor. La categoría es su identificador, que es el único nombre suyo que
 /// esta costura conoce.
 /// </param>
+/// <param name="Setting">
+/// Un ajuste de ESE proveedor, por su identificador y el nombre del ajuste —la URL base, cómo
+/// presenta su clave—, o null si no está puesto (PROV-3 §2). Genérico a propósito: un proveedor por
+/// API necesita cosas que ni Copilot ni un CLI necesitan, y añadir un miembro a la costura por cada
+/// una acabaría con una costura que enumera las casas, que es lo que PROV-2 vino a quitar.
+/// </param>
+/// <param name="Secret">
+/// <b>El secreto de ese proveedor</b>, del almacén cifrado de la máquina, o null (PROV-3 §3). Va
+/// aparte de <see cref="Setting"/> y no como un ajuste más <b>justo para que no pueda acabar en
+/// `settings.json` por descuido</b>: lo que se pide por aquí es lo que no se escribe en claro.
+/// </param>
 public sealed record AgentHostServices(
     Func<string, string?> Model,
     Func<string, TimeSpan> SendTimeout,
@@ -65,4 +76,6 @@ public sealed record AgentHostServices(
     Func<string?> AccountLogin,
     Func<string?> AccountDirectory,
     Func<string?> BridgeExecutable,
-    Func<string, ILogger> Logger);
+    Func<string, ILogger> Logger,
+    Func<string, string, string?> Setting,
+    Func<string, string?> Secret);

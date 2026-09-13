@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Atalaya.OpenAI</RootNamespace>
+  </PropertyGroup>
+
+  <!-- SIN SDK DE NADIE, y es la decisión (PROV-3 §1). El dialecto de `chat/completions` lo hablan
+       siete casas —OpenAI, Azure, Mistral, Groq, OpenRouter, Ollama, LM Studio, vLLM— y ninguna
+       igual del todo: una cabecera distinta aquí, un campo que falta allá. Con `HttpClient` y
+       `System.Text.Json` el ajuste por endpoint es una línea; con un SDK sería esperar a que su
+       autor lo contemple. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Atalaya.OpenAI.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Atalaya.Agents\Atalaya.Agents.csproj" />
+    <ProjectReference Include="..\Atalaya.Domain\Atalaya.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

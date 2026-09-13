@@ -44,6 +44,11 @@ public sealed class ProviderDecouplingTests
 
     private const string OptionalHouseProject = "Atalaya." + "Claude" + "Code";
 
+    /// <summary>La casa por API de PROV-3, y su proyecto. Partidos como los otros.</summary>
+    private const string ApiHouseId = "openai" + "-compatible";
+
+    private const string ApiHouseProject = "Atalaya." + "Open" + "AI";
+
     /// <summary>La raíz del espacio de nombres del SDK de esa casa.</summary>
     private const string SdkNamespace = "GitHub." + "Cop" + "ilot";
 
@@ -79,7 +84,8 @@ public sealed class ProviderDecouplingTests
     /// </summary>
     private static bool IsHouseOfItsOwn(string relative)
         => relative.StartsWith("src/" + HouseProject + "/", StringComparison.Ordinal)
-           || relative.StartsWith("src/" + OptionalHouseProject + "/", StringComparison.Ordinal);
+           || relative.StartsWith("src/" + OptionalHouseProject + "/", StringComparison.Ordinal)
+           || relative.StartsWith("src/" + ApiHouseProject + "/", StringComparison.Ordinal);
 
     /// <summary>
     /// <b>La lista vacía es el final de PROV-2.</b> Aquí vivió, durante el reparto, lo que
