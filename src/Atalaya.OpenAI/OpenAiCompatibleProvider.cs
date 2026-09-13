@@ -31,20 +31,37 @@ public sealed class OpenAiCompatibleProvider
     private readonly Func<OpenAiEndpoint> _endpoint;
     private readonly Func<string?> _key;
     private readonly ILogger _logger;
+    private readonly Func<IChatEndpoint>? _chat;
+    private readonly Func<int?>? _maxTurns;
 
     /// <param name="endpoint">A qué se habla. Se lee en CADA uso, por lo de BUGFIX-AJUSTES.</param>
     /// <param name="key">
     /// La clave, del almacén de secretos. Es una función y no un valor: así esta clase nunca la
     /// retiene, y lo que no se retiene no se vuelca en un log ni en un volcado de memoria.
     /// </param>
+    /// <param name="chat">
+    /// <b>Con qué se habla</b>: el transporte, del que aquí solo se conoce <see cref="IChatEndpoint"/>.
+    /// Es una función por lo mismo que lo es la configuración —se resuelve en cada uso, no al
+    /// construir— y entra por parámetro para que el bucle se pueda probar con un doble guionizado
+    /// en memoria: esta capa no sabe de HTTP, y probarla por HTTP sería probar la de al lado.
+    /// </param>
+    /// <param name="maxTurns">
+    /// El techo de vueltas del bucle, cuando quien construye esto sabe leerlo de los ajustes
+    /// (<c>Thresholds.MaxCallsPerPass</c>). Null —o desactivado— cae en
+    /// <see cref="AuditLoopLimits.DefaultMaxTurns"/>: el bucle es nuestro y no puede girar sin fin.
+    /// </param>
     public OpenAiCompatibleProvider(
         Func<OpenAiEndpoint> endpoint,
         Func<string?> key,
-        ILogger? logger = null)
+        ILogger? logger = null,
+        Func<IChatEndpoint>? chat = null,
+        Func<int?>? maxTurns = null)
     {
         _endpoint = endpoint;
         _key = key;
         _logger = logger ?? NullLogger.Instance;
+        _chat = chat;
+        _maxTurns = maxTurns;
     }
 
     /// <inheritdoc/>
@@ -166,13 +183,94 @@ public sealed class OpenAiCompatibleProvider
     public Task<IReadOnlyList<AgentModel>> ListModelsAsync(CancellationToken ct)
         => Task.FromResult<IReadOnlyList<AgentModel>>(Array.Empty<AgentModel>());
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// <b>Una pasada sobre una unidad</b> (PROV-3 §4): el prompt entero en un mensaje de usuario,
+    /// las siete herramientas del catálogo compartido ofrecidas como <c>functions</c>, y vuelta a
+    /// preguntar hasta que <c>unit_done</c> cierre o el techo lo pare.
+    /// <para>
+    /// <b>El prompt viaja entero y sin partir.</b> <see cref="AuditUnitRequest.StablePrefix"/>
+    /// existe para que una casa que sepa marcar un prefijo cacheable lo marque; en este dialecto no
+    /// se marca nada — la caché de prompt la decide el endpoint y lo único que se puede hacer con
+    /// ella es LEERLA en <c>prompt_tokens_details.cached_tokens</c>. Mandar el prompt entero es
+    /// además lo que garantiza que el prefijo se repita byte a byte entre pasadas, que es de lo que
+    /// vive esa caché.
+    /// </para>
+    /// </summary>
     public Task AuditUnitAsync(AuditUnitRequest request, IAuditToolbox toolbox, CancellationToken ct)
-        => throw new NotImplementedException(
-            "PROV-3: el bucle de herramientas de la auditoría todavía no está escrito.");
+        => ChatToolLoop.RunAsync(
+            Chat(),
+            AuditorFunctions.ForAudit(toolbox),
+            request.Prompt,
+            AuditLoopLimits.MaxTurns(_maxTurns?.Invoke()),
+            RaiseText,
+            Report,
+            RaiseToolStream,
+            RaiseCutSkipped,
+            ct);
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// <b>Una sesión de verificación</b>: el mismo bucle con la única herramienta de verificar.
+    /// Aquí <b>no hay terminal</b> —cerrar una unidad no significa nada— así que la conversación
+    /// acaba cuando el modelo deja de llamar herramientas, y el techo sigue estando por si no lo
+    /// hace. Que se llegue al techo se escribe en el registro y no por <c>CutSkipped</c>: ese
+    /// evento cuenta pasadas de auditoría sin cortar, y una verificación no es ninguna.
+    /// </summary>
     public Task VerifyAsync(VerifyRequest request, IVerifyToolbox toolbox, CancellationToken ct)
-        => throw new NotImplementedException(
-            "PROV-3: la verificación todavía no está escrita.");
+        => ChatToolLoop.RunAsync(
+            Chat(),
+            AuditorFunctions.ForVerify(toolbox),
+            request.Prompt,
+            AuditLoopLimits.MaxTurns(_maxTurns?.Invoke()),
+            RaiseText,
+            Report,
+            RaiseToolStream,
+            why => _logger.LogWarning("openai-compatible: verificación sin cerrar — {Why}", why),
+            ct);
+
+    /// <summary>
+    /// <b>El consumo de UNA llamada</b> (PROV-3 §6), traducido del dialecto al contrato común:
+    /// <c>prompt_tokens</c> es la entrada —que aquí <b>incluye</b> lo cacheado, y por eso este
+    /// proveedor declara <see cref="TokenAccounting.InputIncludesCache"/>—, <c>completion_tokens</c>
+    /// la salida y <c>prompt_tokens_details.cached_tokens</c> la caché LEÍDA.
+    /// <para>
+    /// <b>La caché escrita va a cero, y eso aquí es la verdad y no un hueco.</b>
+    /// <c>chat/completions</c> no tiene ese concepto: el endpoint gestiona la caché del prompt por
+    /// su cuenta y no la cobra aparte, así que no hay un número que falte — hay un concepto que no
+    /// existe. Inventarle un valor desviaría el coste; dejarlo como «no se sabe» sería declarar un
+    /// hueco que nadie puede rellenar nunca.
+    /// </para>
+    /// <para>
+    /// <b>El importe no se informa</b> (<c>Cost = null</c>): este dialecto no lo manda, y el que
+    /// vale es el que la aplicación deriva de los tokens con la tarifa de <c>model-rates.json</c>
+    /// para <c>openai-compatible</c> + modelo. La siembra no trae ninguna para esta casa —cada
+    /// endpoint tiene sus precios y no se pueden adivinar—, así que hasta que alguien escriba la
+    /// suya el agregado sale <b>parcial</b> (D-787), que es lo correcto.
+    /// </para>
+    /// <para>
+    /// <b>Y se publica UNA muestra por llamada, la mande el endpoint o no.</b> En este dialecto
+    /// <c>usage</c> es opcional al hacer streaming; si no llegara y no se publicara nada, el
+    /// contador de llamadas de la sesión —y con él el techo del coordinador— se quedaría a cero
+    /// para siempre. Una llamada sin tokens es «el endpoint no lo dijo»; una llamada que no se
+    /// cuenta es una llamada que no ocurrió, y ocurrió.
+    /// </para>
+    /// </summary>
+    private void Report(ChatUsage? usage)
+        => RaiseUsage(new UsageSample(
+            usage?.PromptTokens ?? 0,
+            usage?.CompletionTokens ?? 0,
+            Cost: null,
+            Model: ModelName,
+            CacheReadTokens: usage?.CachedPromptTokens ?? 0,
+            CacheWriteTokens: 0,
+            Calls: 1));
+
+    /// <summary>
+    /// El transporte. Se resuelve en cada uso —como la configuración— y si no se ha cableado se
+    /// dice exactamente qué falta: lo que no está escrito es el HTTP, no el bucle.
+    /// </summary>
+    private IChatEndpoint Chat()
+        => _chat?.Invoke()
+           ?? throw new NotImplementedException(
+               "PROV-3: este proveedor se construyó sin transporte. El bucle de herramientas está "
+               + "escrito y espera un IChatEndpoint por el parámetro `chat` del constructor.");
 }
