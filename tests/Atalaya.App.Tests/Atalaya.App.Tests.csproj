@@ -31,6 +31,11 @@
          aplicación y el dominio, no sobre los tests: aquí se monta a mano lo que haga falta. -->
     <ProjectReference Include="..\..\src\Atalaya.Copilot\Atalaya.Copilot.csproj" />
 
+    <!-- PROV-3 — la tercera casa, EXPLÍCITA por lo mismo que Copilot: la aplicación ya no
+         referencia el proyecto de ningún proveedor, así que un proyecto de PRUEBAS que quiera
+         conducir un barrido con ella tiene que pedirlo por su nombre. -->
+    <ProjectReference Include="..\..\src\Atalaya.OpenAI\Atalaya.OpenAI.csproj" />
+
     <!-- PROV-2 §5 — el doble que no es de ninguna casa vive junto al contrato, en
          Atalaya.Agents.Tests. El barrido de punta a punta con un proveedor de mentira se conduce
          desde aqui, que es donde esta el arnes de la aplicacion. -->
@@ -63,6 +68,15 @@
        Atalaya.Storage.Tests: un test no depende de la identidad de git de la maquina. -->
   <ItemGroup>
     <Compile Include="..\Shared\*.cs" LinkBase="Shared" />
+  </ItemGroup>
+
+  <!-- PROV-3 — el endpoint falso y su arnés se ENLAZAN, no se copian. El barrido de punta a punta
+       con la casa por API necesita el arnés de la aplicación (hub bare, coordinador, toolbox de
+       verdad), que vive aquí; y el doble del endpoint vive donde vive su proyecto. Duplicarlo
+       garantizaría que las dos copias divergieran en cuanto una API de verdad cambiara de forma. -->
+  <ItemGroup>
+    <Compile Include="..\Atalaya.OpenAI.Tests\EndpointFalso.cs" LinkBase="OpenAI" />
+    <Compile Include="..\Atalaya.OpenAI.Tests\Arnes.cs" LinkBase="OpenAI" />
   </ItemGroup>
 
 </Project>

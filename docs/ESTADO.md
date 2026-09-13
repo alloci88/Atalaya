@@ -662,6 +662,11 @@ Se regenera de `DECISIONS.md`, y ante contradicción **manda `DECISIONS.md`**.
 - `IThreadedAuditor` e `IUnitThread` son capacidad opcional del proveedor y viven en `Atalaya.Agents`. (D-915)
 - Un proveedor que no sabe hilar lo dice por evento y en las notas de la sesión, sin simular nada. (D-915)
 - El recorrido estructurado vive solo como palanca del banco; apagada, el prompt es el de producción byte a byte. (D-908)
+- El proveedor `openai-compatible` habla el dialecto de `chat/completions` y sirve a cualquier endpoint que lo hable, local incluido. (PROV-3)
+- La clave de API vive en el almacén cifrado de la máquina y nunca en `settings.json` ni en el hub. (PROV-3)
+- La siembra no trae tarifas para este proveedor —cada endpoint tiene las suyas— y sin tarifa el agregado sale parcial. (PROV-3)
+- Una URL `http://` solo se admite en un endpoint local; para cualquier otro, `https://`. (PROV-3)
+- Una petición al endpoint se reintenta una vez, y solo en 429 y 5xx. (PROV-3)
 
 ## Interfaz y sistema visual
 

@@ -1362,6 +1362,10 @@ también los del histórico.
 proveedor, así que la tabla la ve todo el equipo y el commit del hub dice quién cambió qué y cuándo.
 Ajustes es **dónde se editan**, no dónde se guardan.
 
+**Lo que no viene sembrado es el endpoint por API**, y tampoco es un olvido: detrás de una
+URL OpenAI-compatible puede haber OpenAI, Azure, Groq u Ollama, cada uno con sus precios —o
+con ninguno—, así que las suyas las escribes tú aquí.
+
 El detalle de qué contiene la tabla, qué significa cada columna y por qué los modelos de Claude Code
 no están, en **[Las tarifas se editan, y viven en el hub](#las-tarifas-se-editan-y-viven-en-el-hub)**.
 
@@ -1570,6 +1574,51 @@ elección.
 Antes de gastar, **el diálogo de lanzamiento dice con quién vas a auditar**: «Vas a auditar 2
 unidades de XBLAST con Claude Code (modelo opus)». El juez de una sesión no debería descubrirse
 leyendo el informe.
+
+### Un endpoint por API: OpenAI, Azure, Ollama y los demás
+
+Además de las dos casas de arriba, Atalaya sabe hablar con **cualquier endpoint que entienda
+`chat/completions` de OpenAI**. No es un proveedor por casa: es uno por **dialecto**, y ese dialecto
+lo hablan OpenAI, Azure OpenAI, Mistral, Groq, OpenRouter, Ollama, LM Studio y vLLM. Aquí no hay
+nada que instalar ni ningún login de máquina: una dirección, un modelo y una clave.
+
+Se configura en **Ajustes → Proveedor y modelo**, eligiéndolo en el desplegable y rellenando cuatro
+cosas:
+
+- **URL base** — la raíz de la API, **sin** `/chat/completions` al final.
+- **Autenticación** — cómo viaja la clave: `Authorization: Bearer`, que es lo que hacen casi todos,
+  o `api-key`, que es lo que pide Azure.
+- **Clave** — se guarda **cifrada en esta máquina**, junto al resto de credenciales y **fuera del
+  hub**. No se escribe en `settings.json`, así que no viaja en una copia de tus ajustes ni llega al
+  repositorio de la organización. En pantalla se ve `•••`: guardada sí, recuperable no.
+- **Modelo** — texto libre, y a propósito: cada endpoint tiene los suyos y no hay una lista común
+  que ofrecer.
+
+Y luego **«Probar»**, que hace la llamada más barata que demuestra que el endpoint contesta y que el
+modelo existe. Es lo que te dice si la configuración vale **antes** de lanzar un barrido entero.
+
+**Tres ejemplos de URL base:**
+
+| | URL base | Autenticación | Quién paga |
+| --- | --- | --- | --- |
+| **OpenAI** | `https://api.openai.com/v1` | Bearer | Tu cuenta de OpenAI, por tokens |
+| **Azure OpenAI** | `https://{recurso}.openai.azure.com/openai/deployments/{despliegue}` | `api-key` | El contrato de tu organización con Azure |
+| **Ollama**, en tu máquina | `http://localhost:11434/v1` | Bearer (la clave da igual) | **Nadie**: es local y es gratis |
+
+**`http://` solo en local.** Una dirección en claro manda el prompt —con tu código dentro— y la
+clave sin cifrar por la red, y en una red corporativa eso lo ve cualquiera. Atalaya la admite en
+`localhost` y en `127.0.0.1`, que es justo donde viven Ollama y LM Studio; para cualquier otra
+dirección, `https://`.
+
+**Con un endpoint local la tarifa es 0 — y hay que escribirla.** Cero no es lo mismo que «no lo sé»:
+mientras no haya una tarifa para tu modelo, Atalaya no se inventa un importe y marca el total como
+**parcial**. Escribe en **Ajustes → Tarifas** una fila para ese modelo con **0** en las tres
+columnas y el gasto constará como cero de verdad, que es lo que quieres ver cuando auditas gratis.
+
+**Y si algo falla, te llega dicho**: la clave rechazada, el modelo que no existe, la cuota agotada o
+el endpoint que no contesta, cada uno con qué revisar. Se reintenta **una vez**, y solo cuando
+reintentar puede servir de algo —un 429 o un error del servidor—; una clave rechazada no se
+reintenta nunca, porque contra una API de pago cada vuelta se paga.
 
 ### Qué NO cambia
 
