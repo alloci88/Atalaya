@@ -59,6 +59,18 @@ internal sealed class EndpointFalso : HttpMessageHandler
             Content = new StringContent(cuerpo, Encoding.UTF8, "application/json"),
         });
 
+    /// <summary>
+    /// <b>Un plantón</b>: ni respuesta ni error del servidor, que es exactamente como se ve un
+    /// timeout desde arriba. Se sirve como lo sirve `HttpClient` cuando se le acaba el plazo —una
+    /// <see cref="TaskCanceledException"/> con un <see cref="TimeoutException"/> dentro—, que es lo
+    /// que permite distinguirlo de una cancelación del usuario sin inventarse nada.
+    /// </summary>
+    public EndpointFalso RespondeTimeout()
+        => Responde(new HttpResponseMessage(HttpStatusCode.OK) { ReasonPhrase = Planton });
+
+    /// <summary>La marca del plantón. No viaja a ningún sitio: se mira y se convierte en la espera.</summary>
+    private const string Planton = "atalaya-planton";
+
     /// <summary>Una respuesta normal, sin streaming (lo que usa «Probar»).</summary>
     public EndpointFalso RespondeJson(string cuerpo, HttpStatusCode codigo = HttpStatusCode.OK)
         => Responde(new HttpResponseMessage(codigo)
@@ -92,7 +104,15 @@ internal sealed class EndpointFalso : HttpMessageHandler
                 + "O el código llama más veces de las que el test esperaba, o al test le falta una.");
         }
 
-        return _respuestas.Dequeue();
+        HttpResponseMessage respuesta = _respuestas.Dequeue();
+        if (respuesta.ReasonPhrase == Planton)
+        {
+            respuesta.Dispose();
+            throw new TaskCanceledException(
+                "El endpoint no contestó dentro del plazo.", new TimeoutException());
+        }
+
+        return respuesta;
     }
 
     // ============================================================ dos ejemplos, para empezar
