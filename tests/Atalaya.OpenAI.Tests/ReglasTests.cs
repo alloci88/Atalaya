@@ -128,7 +128,7 @@ public sealed class ReglasTests
             tabla, Rasgos);
 
         // 600 frescos × 10 $/M + 400 cacheados × 1 $/M + 200 de salida × 30 $/M.
-        conTarifa.Usd.Should().Be(0.0064m + 0.0004m + 0.006m,
+        conTarifa.Usd.Should().Be(0.006m + 0.0004m + 0.006m,
             "la entrada facturable descuenta lo cacheado porque esta casa declara InputIncludesCache");
 
         // --- sin tarifa: un hueco de verdad, y sin frase que lo disculpe.

@@ -228,13 +228,12 @@ public sealed class OpenAiClient : IChatEndpoint, IDisposable
                 }
                 catch (Exception ex) when (NoAnswer(ex, ct))
                 {
-                    if (attempt == 1)
-                    {
-                        _log.LogWarning(ex, "El endpoint no contestó; se reintenta una vez.");
-                        await WaitAsync(ct).ConfigureAwait(false);
-                        continue;
-                    }
-
+                    // EL PLANTÓN NO SE REINTENTA (§7). La spec enumera lo que se reintenta —429 y
+                    // 5xx— y el plantón no está en la lista, y no por descuido: un 429 y un 500 son
+                    // respuestas, o sea que se sabe que el otro lado NO hizo el trabajo. De un
+                    // plantón no se sabe nada: la petición pudo llegar entera, gastarse y perderse
+                    // solo la respuesta. Reintentar ahí es pagar dos veces por un turno, que es
+                    // justo lo que el tope de §7 viene a evitar.
                     throw OpenAiFailure.NoAnswer(ex, baseUrl);
                 }
 
