@@ -19873,3 +19873,53 @@ quedan son de rejilla y D-1000 impide moverlos a tokens. Verificado midiendo otr
 catorce filas de las cinco secciones arrancan en 584. Un solo agente midió y un solo agente aplicó,
 porque Ajustes es un único XAML y repartirlo por regiones entre cinco solo habría dado conflictos.
 De 01:41 a 09:46 del 2026-09-13, con la revisión del `dist` por medio.
+
+## PROV-3 — El primer proveedor por API: cualquier endpoint que hable OpenAI
+
+PROV-2 dejó el motor sin saber quién es el proveedor; PROV-3 trae **el primero que no es de asiento
+ni de CLI**. `Atalaya.OpenAI` —**12 ficheros, 2.198 líneas, sin SDK de nadie**: `HttpClient` y
+`System.Text.Json`, porque el dialecto de `chat/completions` lo hablan OpenAI, Azure, Mistral, Groq,
+OpenRouter, Ollama, LM Studio y vLLM, **y ninguna igual del todo**— implementa `IAuditorProvider` e
+`IAssistedFixProvider` con el identificador `openai-compatible`, que **nombra al dialecto y no a una
+casa**. La entrega entera son **48 ficheros y +5.695 líneas**, de las cuales **2.529 son de tests**.
+Lo que trae: la petición con `stream`, `tools` y `tool_choice` automático; el lector de SSE que
+**ensambla los argumentos partidos** —llegan en varios deltas y casados por `index`, que es donde se
+rompe un lector ingenuo— y que distingue **un `usage` que no llega de un consumo cero**, porque hay
+endpoints de este dialecto que no lo mandan al hacer streaming; el bucle de herramientas con **las
+siete del catálogo común** (`AuditToolText` de PROV-2, nombre y descripción palabra por palabra,
+solo la forma traducida a `functions`), ejecutadas **por el `IAuditToolbox` de la aplicación**, o sea
+con las 21 guardas de dominio sin reimplementar ninguna; el corte en `unit_done` por `ICuttingAuditor`;
+y el consumo mapeado a `UsageSample` con `cached_tokens` en **caché leída** y la escrita en cero, que
+aquí no es un hueco sino la verdad —este dialecto no tiene ese concepto—. La tarifa sale de
+`model-rates.json` por proveedor + modelo y **la siembra no trae ninguna para esta casa**: cada
+endpoint tiene las suyas, se escriben en Ajustes → Tarifas —que ya filtra por proveedor desde
+R-PROV2— y sin tarifa el agregado sale **parcial** (D-787), que es lo correcto. La clave de API vive
+en **`secrets.dat`, cifrada con DPAPI de usuario**, junto a `auth.dat` y fuera del hub; `settings.json`
+guarda URL, modo de autenticación y modelo, y **nunca la clave** —hay tres tests que lo vigilan,
+incluido uno que comprueba que el `record` de configuración **no la imprime**, porque un
+`LogDebug("{Endpoint}", endpoint)` la publicaría sin que nadie lo escribiera a propósito—. Y el
+frente de Ajustes encontró un agujero que nadie había visto: **el reset de fábrica no borraba
+`secrets.dat`**; ahora el almacén es parámetro **obligatorio** del reset, para que no se pueda
+construir uno que se olvide de la clave. `http://` **solo en `localhost`**, porque fuera de la
+máquina el prompt —con el código dentro— y la clave viajarían sin cifrar, y porque es justo donde
+viven Ollama y LM Studio, que son la forma de probar Atalaya sin factura. **Una sola guarda sube a
+dominio, con nombre: `Atalaya.Agents.AuditLoopLimits`**, y no por comodidad —se midió que
+`MaxCallsPerPass` no cubre este caso: `VerifyCoordinator` no mira ningún techo de llamadas, el `0` lo
+desactiva, y solo cuenta si llegan muestras de consumo, que aquí son opcionales—; **el tope de tamaño
+de resultado NO hizo falta** y también se midió: `ReadSignatures` ya corta a 80 líneas en origen.
+**Dos desacuerdos entre frentes los resolvió la spec, y cada uno lo ganó uno distinto**: el plantón
+**no se reintenta** —un 429 y un 500 son respuestas, o sea que se sabe que el otro lado no hizo el
+trabajo; de un plantón no se sabe nada y reintentar es pagar dos veces por el mismo turno—, y la
+cuenta del coste la tenía mal el test, que sumaba dos veces la parte cacheada. **Y una premisa de la
+spec resultó falsa, medida**: no existía «la misma política de proxy y TLS que el cliente de
+GitHub» —`GitHubApiClient` usa el manejador por defecto y `RequireTlsRevocationCheck` solo gobierna
+libgit2—, así que la política HTTP se escribe aquí por primera vez, en la composición, y queda
+apuntado que el ajuste de revocación endurece el hub y **no** endurece todavía la salida HTTP de la
+aplicación. **13 tests de regla —los 6 de la entrega, 10 casos— más 28 casos de transporte, 7 del
+bucle y 10 de Ajustes**, todos contra un endpoint falso en proceso: **ninguno toca la red, ninguno
+usa una clave de verdad y ninguno gasta un céntimo**. El séptimo test que la spec pedía —`http://`
+solo local— **ya lo cubría el andamio** y no se duplicó (N-5). Suite entera: **2.854 en verde**;
+`--selfcheck` en 0 con 98 servicios. **Nada se ha lanzado contra una API real**: para medir M1/M2
+contra el endpoint configurado, `scripts/PromptBench barrido --clon <banco> --tope 6 --sin-corte`,
+y esa decisión —y esa factura— es del usuario. Ningún proveedor más: Anthropic y Gemini son cada
+uno su entrega. Paso 0 del integrador y cuatro frentes en paralelo, de 11:48 a 13:10 del 2026-09-13.
