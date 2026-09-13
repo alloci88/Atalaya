@@ -7,6 +7,7 @@ using Atalaya.App.Views;
 using Atalaya.Domain.Abstractions;
 using Atalaya.Domain.Ids;
 using Atalaya.Inventory;
+using Atalaya.OpenAI;
 using Atalaya.Providers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -300,6 +301,13 @@ public partial class App : Application
         // OPCIONALMENTE (`GetService`, no `GetRequiredService`): mientras nadie lo registre,
         // «Probar» lo dice en línea y el resto de la sección —guardar los cuatro campos— funciona
         // igual. Registrar la fábrica es UNA línea y no toca nada de aquí.
+        // EL TRANSPORTE CON EL QUE «Probar» HABLA DE VERDAD. Lo monta la composición, que es el
+        // único sitio que conoce a las casas: aquí solo se pide el verbo y se le pasa lo que es de
+        // esta máquina —si la revocación de TLS es estricta y dónde escribir—.
+        services.AddSingleton(sp => Providers.AuditorProviders.ChatEndpoints(
+            sp.GetRequiredService<SettingsService>().Current.RequireTlsRevocationCheck,
+            sp.GetRequiredService<ILoggerFactory>().CreateLogger));
+
         services.AddSingleton(sp => new OpenAiEndpointSettings(
             sp.GetRequiredService<SettingsService>(),
             sp.GetRequiredService<ProviderSecretStore>(),

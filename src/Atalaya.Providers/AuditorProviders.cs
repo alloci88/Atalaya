@@ -2,6 +2,7 @@ using Atalaya.Agents;
 using Atalaya.ClaudeCode;
 using Atalaya.Copilot;
 using Atalaya.OpenAI;
+using Microsoft.Extensions.Logging;
 
 namespace Atalaya.Providers;
 
@@ -71,5 +72,30 @@ public static class AuditorProviders
             logger: host.Logger(OpenAiCompatibleProvider.Id));
 
         return new IAuditorProvider[] { copilot, claudeCode, openAi };
+    }
+
+    /// <summary>
+    /// <b>Cómo se monta un transporte para la casa por API</b> (PROV-3 §2 y §8).
+    /// <para>
+    /// Está aquí y no en la aplicación por lo mismo que <see cref="Build"/>: construir un
+    /// <c>OpenAiClient</c> es conocer a una casa, y este proyecto es el único que las conoce. La
+    /// aplicación pide el verbo y lo llama sin saber qué hay detrás.
+    /// </para>
+    /// <para>
+    /// <b>El manejador se construye UNA vez</b> y se reparte: uno por llamada agota los puertos del
+    /// sistema. Lleva el proxy del sistema explícito y la revocación de TLS según el ajuste de la
+    /// máquina, que es D-047 traído a HTTP.
+    /// </para>
+    /// </summary>
+    public static ChatEndpointFactory ChatEndpoints(
+        bool requireTlsRevocationCheck, Func<string, ILogger> logger)
+    {
+        HttpMessageHandler handler = OpenAiHttp.CreateHandler(requireTlsRevocationCheck);
+
+        return (endpoint, key) => new OpenAiClient(
+            () => endpoint,
+            () => key,
+            handler,
+            logger(OpenAiCompatibleProvider.Id));
     }
 }

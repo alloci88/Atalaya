@@ -3,21 +3,6 @@ using Atalaya.OpenAI;
 namespace Atalaya.App.Services;
 
 /// <summary>
-/// <b>Cómo se construye el transporte para una configuración concreta</b> (PROV-3 §2).
-/// <para>
-/// Es el único hueco que Ajustes necesita del proyecto del proveedor y no tiene todavía: quien
-/// sabe montar un <see cref="IChatEndpoint"/> —con su <c>HttpMessageHandler</c>, su política de
-/// proxy y de TLS y su taxonomía de errores— es el transporte, y el transporte no es de esta
-/// capa. Aquí se declara el verbo; el cableado lo pone <c>App.xaml.cs</c>.
-/// </para>
-/// <para>
-/// <b>La clave viaja como parámetro y no se guarda en ningún sitio de este camino</b>: quien la
-/// tiene es el almacén cifrado, y de ahí sale justo para la llamada.
-/// </para>
-/// </summary>
-public delegate IChatEndpoint ChatEndpointFactory(OpenAiEndpoint endpoint, string? apiKey);
-
-/// <summary>
 /// <b>La configuración del endpoint por API, vista desde Ajustes</b> (PROV-3 §§2-3).
 /// <para>
 /// <b>Por qué existe en vez de que el view-model lo haga a mano.</b> Los cuatro datos de esta
