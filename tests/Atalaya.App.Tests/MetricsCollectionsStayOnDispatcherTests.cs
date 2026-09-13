@@ -143,10 +143,20 @@ public sealed class MetricsCollectionsStayOnDispatcherTests : IDisposable
             }
 
             // 5 · La segunda carga de cada vuelta no se puede esperar —nadie guarda su tarea—, así
-            //     que se espera a que haya escrito: cada carga reescribe las cuatro tarjetas.
-            int expected = CardNotificationsPerLoad * (1 + (2 * Rounds));
-            for (int i = 0; i < 400 && watch.CountOf("Cards") < expected; i++)
+            //     que se le da tiempo a llegar. Se espera a que se pose el contador, y no a un
+            //     número concreto: desde BUGFIX-PARPADEO una carga adelantada por otra más nueva
+            //     SE RETIRA sin escribir, así que cuántas escriben de verdad depende de quién gane
+            //     cada vuelta. Lo que este test mira no es cuántas, es DESDE DÓNDE.
+            int quieto = -1;
+            for (int i = 0; i < 400; i++)
             {
+                int ahora = watch.CountOf("Cards");
+                if (ahora == quieto && ahora >= CardNotificationsPerLoad)
+                {
+                    break;
+                }
+
+                quieto = ahora;
                 await Task.Delay(20);
             }
 
@@ -158,13 +168,20 @@ public sealed class MetricsCollectionsStayOnDispatcherTests : IDisposable
             "la suscripción se hace por reflexión: si dejara de encontrar las colecciones del panel "
             + "este test pasaría mirando una lista vacía");
 
+        // EL CONTADOR SIGUE, PERO YA NO CUENTA CARGAS. Aquí se exigían
+        // `CardNotificationsPerLoad * (1 + 2 * Rounds)` avisos —una escritura por cada carga
+        // lanzada— para que un verde no pudiera salir de un panel que nunca cargó. Desde
+        // BUGFIX-PARPADEO esa cuenta es falsa por construcción: la guarda de generación hace que
+        // una carga adelantada por otra más nueva **se retire sin escribir**, que es justo lo que
+        // se arregló, así que de las 17 cargas escriben las que ganan su vuelta y no todas.
+        //
+        // Lo que queda es lo que este test sí puede afirmar: que el panel cargó al menos una vez
+        // —con cero avisos, la suscripción miraría un panel muerto—. Que el detector no está
+        // ciego lo prueba el canario de abajo, que es la guarda de verdad contra el falso verde.
         cardNotifications.Should().BeGreaterThanOrEqualTo(
-            CardNotificationsPerLoad * (1 + (2 * Rounds)),
-            "cada carga reescribe las cuatro tarjetas, así que {0} vueltas con dos cargas cada una "
-            + "tienen que dejar {1} avisos en «Cards»; con menos, la carga que dispara el cambio de "
-            + "periodo no llegó a correr y el solape no se ha ejercitado",
-            Rounds,
-            CardNotificationsPerLoad * (1 + (2 * Rounds)));
+            CardNotificationsPerLoad,
+            "sin un solo aviso en «Cards» el panel no llegó a cargar, y este test estaría mirando "
+            + "quince colecciones que nadie ha tocado");
 
         string offenders = string.Join(
             Environment.NewLine + Environment.NewLine, watch.Offenders);

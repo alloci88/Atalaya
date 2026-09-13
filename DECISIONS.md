@@ -19923,3 +19923,45 @@ solo local— **ya lo cubría el andamio** y no se duplicó (N-5). Suite entera:
 contra el endpoint configurado, `scripts/PromptBench barrido --clon <banco> --tope 6 --sin-corte`,
 y esa decisión —y esa factura— es del usuario. Ningún proveedor más: Anthropic y Gemini son cada
 uno su entrega. Paso 0 del integrador y cuatro frentes en paralelo, de 11:48 a 13:10 del 2026-09-13.
+
+## BUGFIX-PARPADEO — La carga rancia que pisaba a la nueva
+
+`MetricsPanelTests.Las_graficas_llevan_el_tramo_completo_de_cada_cubo_al_tooltip` parpadeaba con
+`IndexOutOfRangeException` en `List.Insert` llamado desde una `ObservableCollection`. Medido antes de
+tocar nada (N-2): **3 fallos de 50 corridas aisladas —un 6 %, sin forzar nada—**, lo que tumba el
+«0 de 6» con el que esta casa lo había dado por no reproducible: con seis corridas un 6 % no se ve.
+Los dos puntos de inserción, con línea: **`MetricsViewModel.cs:640`** (`AppOptions.Add`) contra
+**`:643`** (`FirstOrDefault` enumerando), y la firma original es la 640 contra sí misma. Los dos
+hilos vienen de **código de producto**: poner `SelectedRange` dispara `Reload()` → **`_ = LoadAsync()`
+sin esperar** (`:253`), y la carga que ya estaba en marcha sigue viva; las dos llegan al **único**
+`await` del método (`:602`) y sus continuaciones reanudan en hilos distintos. La traza dejó la
+prueba de que el estado queda corrompido y no solo de que se lanza: `AppOptions` llega a **3
+elementos cuando como mucho debía tener 2**, porque los dos `Clear()`+`Add` se mezclaron. Y de
+regalo, un **Heisenbug confirmado por experimento**: la instrumentación que escribía a fichero **bajo
+cerrojo** dio 0 fallos en 80 corridas —el cerrojo serializaba justo las dos continuaciones que
+compiten—, así que hubo que medir con un búfer en memoria. **Las dos hipótesis eran ciertas a
+medias, como la spec anticipaba, y este equipo se equivocó al cerrar antes de tenerlo todo**: es
+verdad que la excepción es del arnés —con el `DispatcherSynchronizationContext` de WPF la
+continuación vuelve al hilo de la ventana y las escrituras quedan serializadas; medido: 403
+infractores sin contexto, **0 con él**—, pero eso mide **afinidad de hilo, no concurrencia de
+cargas**: el despachador las serializa, no las ordena ni elimina una. El solape lo crea producto, lo
+dispara un `ComboBox` de verdad, y en la ventana se ve así: **gana la carga que termine última, no la
+más reciente**, con lo que el panel puede quedarse con los datos de cuatro semanas mientras el
+selector dice ocho —y `SyncAppOptions` reescribe también `SelectedApp`, así que el filtro de
+aplicación puede saltar hacia atrás solo—. Ni cierre ni panel a medias: cada continuación corre sus
+doce vuelcos sin interrupción, porque después del `await` no hay otro. El arreglo es **una guarda de
+generación**: un contador que se incrementa con `Interlocked` al entrar en `LoadAsync` y se comprueba
+con `Volatile.Read` **justo al volver del recuento y antes de escribir nada**; la carga adelantada se
+retira en silencio, y el giro de «ocupado½ lo apaga solo la vigente. **Ni un cerrojo ni
+`EnableCollectionSynchronization`**: lo que se ordena es quién escribe, no el acceso a lo escrito —
+un cerrojo habría escondido la carrera en vez de quitarla, y la propia medida demostró que esconde.
+Cura las dos mitades con un cambio: en el arnés solo escribe la más nueva, así que el rojo
+desaparece **sin tocar el test que parpadeaba ni meterlo en ninguna colección**; en la ventana el
+panel siempre concuerda con el selector. Verificado: **0 fallos en 50 corridas aisladas** (eran 3) y
+tres pasadas seguidas de la suite entera en verde. Queda un test nuevo, el del despachador, que ancla
+la otra mitad —que el volcado va en el despachador— y que hoy se sostiene sola por el contexto
+ambiente: un `ConfigureAwait(false)` puesto «para no bloquear» la rompería sin cambiar una línea de
+lo que el panel enseña. Se quedó sin test la regla del rancio, y se dice por qué: hacerlo
+determinista exigía abrir una costura en `MetricsQuery`, que es `sealed`, y eso es tocar lo que
+Métricas calcula — justo lo que esta entrega tenía prohibido. Dos agentes en paralelo, de 13:23 a
+15:0X del 2026-09-13.

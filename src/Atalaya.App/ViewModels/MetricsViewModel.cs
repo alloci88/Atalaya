@@ -182,6 +182,27 @@ public sealed partial class MetricsViewModel : ViewModelBase
     /// <summary>Mientras se rellenan los selectores, un cambio de seleccion no re-agrega nada.</summary>
     private bool _binding;
 
+    /// <summary>
+    /// <b>Qué carga es la vigente</b> (BUGFIX-PARPADEO). Cambiar el filtro o el periodo dispara
+    /// otra agregación <b>sin esperar a la que hubiera en marcha</b> (<see cref="Reload"/>), así
+    /// que dos pueden convivir: la agregación recorre todos los hallazgos y todas las sesiones de
+    /// todas las aplicaciones, y la vista ya es manejable mientras cuenta.
+    /// <para>
+    /// <b>Sin esto gana la que termine ÚLTIMA, no la más reciente.</b> Si la de cuatro semanas
+    /// tarda más que la de ocho, el panel acaba con los datos de cuatro mientras el selector dice
+    /// ocho — y como <see cref="SyncAppOptions"/> también reescribe <c>SelectedApp</c>, el filtro
+    /// de aplicación puede saltar hacia atrás solo. No hay error, no hay aviso: hay un panel que
+    /// no corresponde a lo que se le ha pedido.
+    /// </para>
+    /// <para>
+    /// Se incrementa al entrar y se comprueba <b>al volver del recuento</b>, antes de escribir
+    /// nada: una carga adelantada se retira en silencio, que es lo único que puede hacer. No hay
+    /// cerrojo ni sincronización de colección: lo que se ordena es <b>quién escribe</b>, no el
+    /// acceso a lo escrito — un cerrojo aquí escondería la carrera en vez de quitarla.
+    /// </para>
+    /// </summary>
+    private int _generation;
+
     private bool _dark = true;
 
     public MetricsViewModel(
@@ -591,6 +612,8 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
     public override async Task LoadAsync()
     {
+        int mine = Interlocked.Increment(ref _generation);
+
         IsBusy = true;
         try
         {
@@ -600,6 +623,16 @@ public sealed partial class MetricsViewModel : ViewModelBase
             // Agregar recorre todos los hallazgos y todas las sesiones de todas las apps. Fuera
             // del hilo de UI: el panel no puede congelar la ventana mientras cuenta.
             MetricsDashboard dashboard = await Task.Run(() => _metrics.Build(filter));
+
+            // AQUÍ SE RETIRA UNA CARGA ADELANTADA, y tiene que ser justo aquí: es el único
+            // `await` del método, así que todo lo que escribe va debajo y aún no se ha tocado
+            // nada. Lo que sigue son doce vuelcos sobre quince colecciones enlazadas; dejar pasar
+            // a la vieja es dejar que pise a la nueva entera.
+            if (Volatile.Read(ref _generation) != mine)
+            {
+                return;
+            }
+
             _dashboard = dashboard;
 
             SyncAppOptions(dashboard);
@@ -620,7 +653,12 @@ public sealed partial class MetricsViewModel : ViewModelBase
         }
         finally
         {
-            IsBusy = false;
+            // Y el giro lo apaga SOLO la vigente: si lo apagara la que se retira, la ventana
+            // diría «ya está» mientras la buena sigue contando.
+            if (Volatile.Read(ref _generation) == mine)
+            {
+                IsBusy = false;
+            }
         }
     }
 
