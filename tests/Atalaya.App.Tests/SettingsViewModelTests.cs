@@ -37,7 +37,8 @@ public sealed class SettingsViewModelTests : IDisposable
             agent ?? new FakeCopilotAgent(),
             _toasts,
             new FactoryResetService(
-                hub, _paths, _settings, TestFactory.Account(_paths), new OpenSessionStore(_paths)),
+                hub, _paths, _settings, TestFactory.Account(_paths), new OpenSessionStore(_paths),
+                new ProviderSecretStore(_paths)),
             confirmer ?? new NeverConfirms(),
             hub,
             new NavigationService(new EmptyServices()));

@@ -149,7 +149,15 @@
                             </StackPanel>
                         </DockPanel>
 
-                        <DockPanel Style="{StaticResource Setting.Row}">
+                        <!-- PROV-3 §2 — EL DESPLEGABLE DE MODELOS ES DE QUIEN TIENE LISTA. La casa
+                             por API no la tiene: cada endpoint publica los suyos y el proveedor
+                             devuelve vacío a propósito, así que aquí el desplegable se quedaría con
+                             una sola entrada que nadie puede cambiar. Con esa casa elegida, el
+                             modelo se escribe a mano en su propia fila, más abajo. Es lo único que
+                             se mueve de las filas que ya había, y se mueve porque dos controles
+                             para el mismo valor —uno de ellos inservible— es peor que uno. -->
+                        <DockPanel Style="{StaticResource Setting.Row}"
+                                   Visibility="{Binding ShowModelList, Converter={StaticResource BoolToVisibility}}">
                             <StackPanel Style="{StaticResource Setting.Label}">
                                 <TextBlock Text="Modelo del auditor" Style="{StaticResource Setting.Name}" />
                                 <TextBlock Style="{StaticResource Setting.Help}"
@@ -194,6 +202,152 @@
                                               Stroke="{DynamicResource Brush.Warning.Ink}" />
                                         <TextBlock Text="{Binding ModelsNotice}" Style="{StaticResource Notice.Text}"
                                                    Foreground="{DynamicResource Brush.Warning.Ink}" />
+                                    </DockPanel>
+                                </Border>
+                            </StackPanel>
+                        </DockPanel>
+
+                        <!-- ====================== PROV-3 §2 · EL ENDPOINT POR API ======================
+
+                             Cuatro filas y un botón, y SOLO con la casa por API elegida. Con
+                             Copilot o con Claude Code no hay URL que escribir ni clave que
+                             guardar: un control que no gobierna nada es peor que no tenerlo
+                             (D-275).
+
+                             Van en la rejilla de R-AJUSTES como todas las demás —etiqueta de 320 a
+                             la izquierda, control a la derecha empezando en la misma x, un ancho y
+                             un alto—, así que no hay aquí ni un margen ni un tamaño escrito a
+                             mano. -->
+                        <DockPanel Style="{StaticResource Setting.Row}"
+                                   Visibility="{Binding ShowOpenAiEndpoint, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel Style="{StaticResource Setting.Label}">
+                                <TextBlock Text="URL base" Style="{StaticResource Setting.Name}" />
+                                <TextBlock Style="{StaticResource Setting.Help}"
+                                           Text="La raíz de la API, sin «/chat/completions». Aplica a las sesiones que lances a partir de ahora." />
+                                <ToggleButton x:Name="MasUrlBase" Style="{StaticResource Toggle.More}" />
+                                <TextBlock Style="{StaticResource Setting.More}"
+                                           Text="Lo que se ve en el hueco es un EJEMPLO, no un valor: mientras no escribas nada, Atalaya no apunta a ninguna parte. Con Azure la raíz incluye el despliegue; con Ollama o LM Studio es la de tu propia máquina. «http://» solo se admite en un endpoint local — fuera de ella el prompt, con tu código dentro, y la clave viajarían sin cifrar."
+                                           Visibility="{Binding IsChecked, ElementName=MasUrlBase, Converter={StaticResource BoolToVisibility}}" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Top"
+                                        c:Stack.Gap="{StaticResource Space.S}">
+                                <ui:TextBox Text="{Binding OpenAiBaseUrl}"
+                                            PlaceholderText="{Binding UrlPlaceholder}"
+                                            AutomationProperties.Name="URL base"
+                                            Style="{StaticResource Field.Text}" />
+                                <c:SavedMark Shown="{Binding Saved[OpenAiBaseUrl].Shown}" />
+                            </StackPanel>
+                        </DockPanel>
+
+                        <DockPanel Style="{StaticResource Setting.Row}"
+                                   Visibility="{Binding ShowOpenAiEndpoint, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel Style="{StaticResource Setting.Label}">
+                                <TextBlock Text="Autenticación" Style="{StaticResource Setting.Name}" />
+                                <TextBlock Style="{StaticResource Setting.Help}"
+                                           Text="Con qué cabecera viaja la clave. Aplica a las sesiones que lances a partir de ahora." />
+                                <ToggleButton x:Name="MasAuth" Style="{StaticResource Toggle.More}" />
+                                <TextBlock Style="{StaticResource Setting.More}"
+                                           Text="«Bearer» es lo que hacen OpenAI y casi todos; «api-key» es lo que pide Azure OpenAI, y es el único motivo de que aquí haya que elegir. No hay un tercer valor."
+                                           Visibility="{Binding IsChecked, ElementName=MasAuth, Converter={StaticResource BoolToVisibility}}" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Top"
+                                        c:Stack.Gap="{StaticResource Space.S}">
+                                <ComboBox ItemsSource="{Binding AuthModes}"
+                                          SelectedValue="{Binding OpenAiAuthMode}"
+                                          SelectedValuePath="Value"
+                                          DisplayMemberPath="Label"
+                                          AutomationProperties.Name="Autenticación"
+                                          Style="{StaticResource Field.Select}" />
+                                <c:SavedMark Shown="{Binding Saved[OpenAiAuthMode].Shown}" />
+                            </StackPanel>
+                        </DockPanel>
+
+                        <!-- §3 — LA CLAVE NO ES UN AJUSTE. La caja nace vacía siempre y lo que se
+                             escriba en ella va al almacén cifrado de la máquina; `settings.json`
+                             no la ve pasar ni un momento. La línea de debajo dice si hay una
+                             guardada, que es lo único que se puede decir de ella sin enseñarla. -->
+                        <DockPanel Style="{StaticResource Setting.Row}"
+                                   Visibility="{Binding ShowOpenAiEndpoint, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel Style="{StaticResource Setting.Label}">
+                                <TextBlock Text="Clave de API" Style="{StaticResource Setting.Name}" />
+                                <TextBlock Style="{StaticResource Setting.Help}"
+                                           Text="Se guarda cifrada en esta máquina, nunca en los ajustes ni en el hub. Aplica a las sesiones que lances a partir de ahora." />
+                                <ToggleButton x:Name="MasClave" Style="{StaticResource Toggle.More}" />
+                                <TextBlock Style="{StaticResource Setting.More}"
+                                           Text="Va a «secrets.dat», cifrado con la protección de datos de tu usuario de Windows y al lado de la credencial de tu cuenta: otro usuario de esta máquina no la descifra, y copiar el fichero a otra no sirve de nada. Se guarda al salir del campo; para borrarla, vacíalo y sal."
+                                           Visibility="{Binding IsChecked, ElementName=MasClave, Converter={StaticResource BoolToVisibility}}" />
+                            </StackPanel>
+                            <StackPanel VerticalAlignment="Top">
+                                <StackPanel Orientation="Horizontal"
+                                            c:Stack.Gap="{StaticResource Space.S}">
+                                    <ui:PasswordBox x:Name="ClaveApi"
+                                                    PlaceholderText="Pega aquí la clave"
+                                                    AutomationProperties.Name="Clave de API"
+                                                    Style="{StaticResource Field.Secret}"
+                                                    PasswordChanged="ClaveApi_PasswordChanged"
+                                                    LostFocus="ClaveApi_LostFocus" />
+                                    <c:SavedMark Shown="{Binding Saved[ApiKeyState].Shown}" />
+                                </StackPanel>
+                                <TextBlock Text="{Binding ApiKeyState}"
+                                           Style="{StaticResource Text.Small}"
+                                           Margin="{StaticResource Pad.XXS.Top}" />
+                            </StackPanel>
+                        </DockPanel>
+
+                        <!-- EL MODELO, A MANO, Y «PROBAR» PEGADO A ÉL. La acción va junto a lo que
+                             actúa (D-999): ésta es la última pieza que falta para que la
+                             configuración esté completa, así que es aquí donde se comprueba — y su
+                             respuesta se enseña EN LÍNEA, debajo, no en un toast que se va. -->
+                        <DockPanel Style="{StaticResource Setting.Row}"
+                                   Visibility="{Binding ShowOpenAiEndpoint, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel Style="{StaticResource Setting.Label}">
+                                <TextBlock Text="Modelo" Style="{StaticResource Setting.Name}" />
+                                <TextBlock Style="{StaticResource Setting.Help}"
+                                           Text="Texto libre: cada endpoint tiene los suyos y no hay una lista común que ofrecer. Aplica a las sesiones que lances a partir de ahora." />
+                                <ToggleButton x:Name="MasModeloApi" Style="{StaticResource Toggle.More}" />
+                                <TextBlock Style="{StaticResource Setting.More}"
+                                           Text="Se escribe tal y como lo nombre tu endpoint, sin traducirlo. «Probar» hace la llamada más barata que demuestra dos cosas a la vez: que el endpoint contesta y que ese modelo existe para tu clave."
+                                           Visibility="{Binding IsChecked, ElementName=MasModeloApi, Converter={StaticResource BoolToVisibility}}" />
+                            </StackPanel>
+                            <StackPanel VerticalAlignment="Top">
+                                <StackPanel Orientation="Horizontal"
+                                            c:Stack.Gap="{StaticResource Space.S}">
+                                    <ui:TextBox Text="{Binding SelectedModelId}"
+                                                PlaceholderText="El nombre exacto que use tu endpoint"
+                                                AutomationProperties.Name="Modelo"
+                                                Style="{StaticResource Field.Text}" />
+                                    <Button Content="Probar" Command="{Binding TestEndpointCommand}"
+                                            AutomationProperties.Name="Probar el endpoint" />
+                                    <c:SavedMark Shown="{Binding Saved[SelectedModelId].Shown}" />
+                                </StackPanel>
+
+                                <Border Style="{StaticResource Notice.Success}"
+                                        Margin="{StaticResource Pad.S.Top}"
+                                        Visibility="{Binding ProbeSucceeded, Converter={StaticResource BoolToVisibility}}">
+                                    <DockPanel>
+                                        <Path DockPanel.Dock="Left" Style="{StaticResource Notice.Icon}"
+                                              Data="{x:Static c:Icons.Check}"
+                                              Stroke="{DynamicResource Brush.Success.Ink}" />
+                                        <TextBlock Text="{Binding ProbeMessage}" Style="{StaticResource Notice.Text}"
+                                                   Foreground="{DynamicResource Brush.Success.Ink}" />
+                                    </DockPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource Notice.Danger}"
+                                        Margin="{StaticResource Pad.S.Top}"
+                                        Visibility="{Binding ProbeFailed, Converter={StaticResource BoolToVisibility}}">
+                                    <DockPanel>
+                                        <Path DockPanel.Dock="Left" Style="{StaticResource Notice.Icon}"
+                                              Data="{x:Static c:Icons.Warning}"
+                                              Stroke="{DynamicResource Brush.Danger.Ink}" />
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding ProbeMessage}" Style="{StaticResource Notice.Text}"
+                                                       Foreground="{DynamicResource Brush.Danger.Ink}" />
+                                            <ToggleButton x:Name="MasProbe" Style="{StaticResource Toggle.More}"
+                                                          Visibility="{Binding HasProbeDetail, Converter={StaticResource BoolToVisibility}}" />
+                                            <TextBlock Text="{Binding ProbeDetail}" Style="{StaticResource Setting.More}"
+                                                       Visibility="{Binding IsChecked, ElementName=MasProbe, Converter={StaticResource BoolToVisibility}}" />
+                                        </StackPanel>
                                     </DockPanel>
                                 </Border>
                             </StackPanel>

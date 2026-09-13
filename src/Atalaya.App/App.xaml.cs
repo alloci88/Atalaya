@@ -290,6 +290,20 @@ public partial class App : Application
         services.AddSingleton<ActiveApp>();
         // PROV-3 §3: las claves de API, cifradas con DPAPI de usuario y fuera de `settings.json`.
         services.AddSingleton(sp => new ProviderSecretStore(paths));
+
+        // PROV-3 §2 — LO QUE AJUSTES EDITA DE LA CASA POR API, por sus dos caminos: la URL, el
+        // modo de autenticación y el modelo a `settings.json`, y la clave al almacén cifrado.
+        //
+        // `ChatEndpointFactory` —el transporte con el que «Probar» habla de verdad— es lo único
+        // que falta, y es de quien escribe el transporte: construirlo pide un `HttpMessageHandler`
+        // con la política de proxy y de TLS de la casa, y eso no es de esta capa. Se resuelve
+        // OPCIONALMENTE (`GetService`, no `GetRequiredService`): mientras nadie lo registre,
+        // «Probar» lo dice en línea y el resto de la sección —guardar los cuatro campos— funciona
+        // igual. Registrar la fábrica es UNA línea y no toca nada de aquí.
+        services.AddSingleton(sp => new OpenAiEndpointSettings(
+            sp.GetRequiredService<SettingsService>(),
+            sp.GetRequiredService<ProviderSecretStore>(),
+            sp.GetService<ChatEndpointFactory>()));
         services.AddSingleton(sp => new MachineConfigStore(paths.MachinesJson));
         services.AddSingleton<InventoryScanner>();
         // F7: el escaneo de directivas es un recorrido distinto del árbol, con su propio catálogo.

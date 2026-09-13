@@ -480,7 +480,8 @@ public sealed class AuditorProviderTests : IDisposable
             registry.Fallback,
             new ToastCenter(),
             new FactoryResetService(
-                _hub, _paths, _settings, TestFactory.Account(_paths), new OpenSessionStore(_paths)),
+                _hub, _paths, _settings, TestFactory.Account(_paths), new OpenSessionStore(_paths),
+                new ProviderSecretStore(_paths)),
             new NeverResets(),
             _hub,
             new NavigationService(new NoServices()),

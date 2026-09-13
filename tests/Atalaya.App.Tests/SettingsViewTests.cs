@@ -350,7 +350,8 @@ public sealed class SettingsViewTests
             new Atalaya.Copilot.FakeCopilotAgent(),
             new ToastCenter(),
             new FactoryResetService(
-                hub, paths, settings, TestFactory.Account(paths), new OpenSessionStore(paths)),
+                hub, paths, settings, TestFactory.Account(paths), new OpenSessionStore(paths),
+                new ProviderSecretStore(paths)),
             new NoReset(),
             hub,
             new NavigationService(new NoServices()));

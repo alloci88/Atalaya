@@ -2,10 +2,18 @@
 using Atalaya.App.Services;
 using Atalaya.App.Views;
 using Atalaya.Domain.Model;
+using Atalaya.OpenAI;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace Atalaya.App.ViewModels;
+
+/// <summary>
+/// Una forma de presentar la clave en el desplegable de «Autenticación» (PROV-3 §2). Son DOS y no
+/// hay una tercera: el rótulo es la cabecera que de verdad viaja, para que quien copie la
+/// documentación de su endpoint reconozca cuál es la suya.
+/// </summary>
+public sealed record AuthOption(OpenAiAuth Value, string Label);
 
 /// <summary>
 /// Una opción del desplegable de modelos (F5.1). El precio solo aparece si el SDK lo publica:
@@ -162,6 +170,14 @@ public sealed partial class SettingsViewModel : ViewModelBase
     /// <summary>El fichero con el que probar cuando no hay ninguna aplicación abierta.</summary>
     private readonly string _ownFile;
 
+    /// <summary>
+    /// La configuración del endpoint por API (PROV-3 §2). Opcional como el resto de piezas de esta
+    /// página: los tests que solo ejercitan los ajustes numéricos no montan un almacén de secretos,
+    /// y sin servicio las cuatro filas de esa casa no se enseñan —que es exactamente lo que hay que
+    /// hacer cuando no hay dónde guardarlas.
+    /// </summary>
+    private readonly OpenAiEndpointSettings? _openAi;
+
     /// <summary>Plazo para que el SDK conteste con su catálogo antes de rendirse.</summary>
     private static readonly TimeSpan ModelListTimeout = TimeSpan.FromSeconds(30);
 
@@ -179,7 +195,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
         EditorDetector? editors = null,
         EditorLauncher? launcher = null,
         ActiveApp? activeApp = null,
-        AppPaths? paths = null)
+        AppPaths? paths = null,
+        OpenAiEndpointSettings? openAi = null)
     {
         _settings = settings;
         _agent = agent;
@@ -196,6 +213,11 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _launcher = launcher;
         _activeApp = activeApp;
         _ownFile = paths?.SettingsJson ?? string.Empty;
+        // PROV-3 §2 — lo guardado de la casa por API. La clave NO se lee aquí: de ella solo se
+        // pregunta si la hay, y eso se responde cada vez que hace falta.
+        _openAi = openAi;
+        _openAiBaseUrl = openAi?.BaseUrl ?? string.Empty;
+        _openAiAuthMode = openAi?.Auth ?? OpenAiAuth.Bearer;
         AppSettings s = settings.Current;
         _editor = s.Editor;
         BuildEditorOptions(s.Editor);
@@ -242,7 +264,10 @@ public sealed partial class SettingsViewModel : ViewModelBase
     /// <summary>Hay algo que elegir de verdad.</summary>
     public bool HasProviderChoice => Providers.Count > 1;
 
-    [ObservableProperty] private string _selectedProviderId;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowOpenAiEndpoint))]
+    [NotifyPropertyChangedFor(nameof(ShowModelList))]
+    private string _selectedProviderId;
 
     /// <summary>
     /// Cambiar de proveedor recarga la lista de modelos y recupera el modelo que ESA casa tenía
@@ -251,6 +276,11 @@ public sealed partial class SettingsViewModel : ViewModelBase
     /// </summary>
     partial void OnSelectedProviderIdChanged(string value)
     {
+        // El resultado de «Probar» es de UNA configuración: al cambiar de casa deja de hablar de
+        // lo que hay en pantalla, y un resultado que ya no corresponde miente igual que un dato
+        // mal puesto.
+        ClearProbe();
+
         if (_providers is null || string.IsNullOrWhiteSpace(value))
         {
             return;
@@ -289,6 +319,126 @@ public sealed partial class SettingsViewModel : ViewModelBase
         => CurrentProvider is Atalaya.Agents.IAssistedFixProvider
             ? $"El arreglo asistido también es de {CurrentProvider.ProviderName}."
             : $"{CurrentProvider.ProviderName} audita, pero no hace arreglos asistidos.";
+
+    // --- El endpoint por API (PROV-3 §§2-3) ---
+
+    /// <summary>
+    /// <b>Las cuatro filas de la casa por API se enseñan cuando es la elegida, y solo entonces</b>
+    /// (PROV-3 §2). Con Copilot o Claude Code no hay URL que escribir ni clave que guardar, y una
+    /// fila que no gobierna nada es ruido con aspecto de ajuste (D-275).
+    /// </summary>
+    public bool ShowOpenAiEndpoint
+        => _openAi is not null
+           && string.Equals(SelectedProviderId, OpenAiEndpointSettings.ProviderId, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Y el desplegable de modelos se va con ellas, porque esta casa <b>no tiene lista</b>: cada
+    /// endpoint publica los suyos, así que el proveedor devuelve vacío a propósito y el desplegable
+    /// se quedaría con una sola entrada que nadie puede cambiar. El modelo se escribe abajo, a
+    /// mano, que es la única forma que funciona aquí. Dos controles para el mismo valor —uno de
+    /// ellos inservible— es peor que uno.
+    /// </summary>
+    public bool ShowModelList => !ShowOpenAiEndpoint;
+
+    /// <summary>
+    /// Lo que se enseña en el hueco del campo de la URL. <b>No es un valor por defecto</b>, y esa
+    /// es la decisión: escrito como valor, quien no se fije apunta a OpenAI sin querer y paga.
+    /// </summary>
+    public string UrlPlaceholder => OpenAiEndpointSettings.UrlPlaceholder;
+
+    [ObservableProperty] private string _openAiBaseUrl;
+
+    /// <summary>Las dos formas de presentar la clave, en el orden en el que se leen.</summary>
+    public IReadOnlyList<AuthOption> AuthModes { get; } = new[]
+    {
+        new AuthOption(OpenAiAuth.Bearer, "Bearer"),
+        new AuthOption(OpenAiAuth.ApiKey, "api-key"),
+    };
+
+    [ObservableProperty] private OpenAiAuth _openAiAuthMode;
+
+    /// <summary>
+    /// <b>Que hay clave, sin enseñarla</b> (PROV-3 §3). La caja nace vacía siempre —enseñar la
+    /// guardada, aunque fuera en puntos, sería tenerla en el árbol visual para nada—, así que sin
+    /// esta línea no habría forma de distinguir «no la he puesto» de «ya está puesta».
+    /// </summary>
+    public string ApiKeyState => _openAi is null
+        ? string.Empty
+        : _openAi.HasKey
+            ? "Hay una clave guardada, cifrada en esta máquina. Escribe otra para sustituirla."
+            : "No hay ninguna clave guardada en esta máquina.";
+
+    /// <summary>
+    /// Guarda la clave que se acaba de escribir. La llama la vista al salir del campo, y solo si
+    /// alguien la ha tocado: tabular por encima de una caja vacía no puede borrar la que hay.
+    /// <para>
+    /// <b>Va al almacén cifrado y a ningún otro sitio.</b> No pasa por <see cref="AppSettings"/>,
+    /// no se guarda en una propiedad del view-model y no se escribe en ningún registro.
+    /// </para>
+    /// </summary>
+    public void SaveApiKey(string? key)
+    {
+        if (_openAi is null)
+        {
+            return;
+        }
+
+        _openAi.SaveKey(key);
+        OnPropertyChanged(nameof(ApiKeyState));
+        ClearProbe();
+        Flash(nameof(ApiKeyState));
+    }
+
+    /// <summary>
+    /// Lo último que contestó «Probar». Es estado de la página mientras se mira —no una
+    /// preferencia—, y por eso no se guarda en ningún sitio.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProbeMessage))]
+    [NotifyPropertyChangedFor(nameof(ProbeDetail))]
+    [NotifyPropertyChangedFor(nameof(ProbeSucceeded))]
+    [NotifyPropertyChangedFor(nameof(ProbeFailed))]
+    [NotifyPropertyChangedFor(nameof(HasProbeDetail))]
+    private ChatProbe? _probe;
+
+    /// <summary>Qué pasó, redactado para quien está mirando Ajustes.</summary>
+    public string ProbeMessage => Probe?.Message ?? string.Empty;
+
+    /// <summary>Lo que contestó el endpoint, crudo y plegado. Nunca lleva la clave.</summary>
+    public string ProbeDetail => Probe?.Detail ?? string.Empty;
+
+    public bool HasProbeDetail => !string.IsNullOrWhiteSpace(ProbeDetail);
+
+    public bool ProbeSucceeded => Probe is { Ok: true };
+
+    public bool ProbeFailed => Probe is { Ok: false };
+
+    private void ClearProbe() => Probe = null;
+
+    /// <summary>
+    /// <b>Probar</b> (PROV-3 §2), al estilo del «Probar» del editor: la llamada más barata que
+    /// demuestre que el endpoint contesta y que el modelo existe, y la respuesta EN LÍNEA, debajo
+    /// del botón. Sin esto, la única forma de saber si esta configuración vale es lanzar una
+    /// auditoría entera y verla fallar.
+    /// </summary>
+    [RelayCommand]
+    private async Task TestEndpoint()
+    {
+        if (_openAi is null || IsBusy)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            Probe = await _openAi.ProbeAsync(CancellationToken.None);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
 
     public override string Title => "Ajustes";
 
@@ -740,6 +890,11 @@ public sealed partial class SettingsViewModel : ViewModelBase
         nameof(ExhaustiveSweep),
         nameof(SelectedProviderId),
         nameof(SelectedModelId),
+        // PROV-3 §2 — los dos ajustes de la casa por API. Van aquí como los demás porque se
+        // guardan como los demás: al cambiarlos, sin botón. Que su SITIO dentro del fichero sea
+        // otro —el saco por proveedor y no un campo de `AppSettings`— lo resuelve `Persist`.
+        nameof(OpenAiBaseUrl),
+        nameof(OpenAiAuthMode),
     };
 
     /// <summary>
@@ -799,6 +954,24 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _persisting = true;
         try
         {
+            // PROV-3 §2 — la URL y el modo de autenticación NO son campos de `AppSettings`: viven
+            // en el saco por proveedor, y quien sabe componer su clave es el servicio. Por eso se
+            // escriben por su camino y no desde `BuildSettings`, que solo conoce los campos.
+            if (field == nameof(OpenAiBaseUrl))
+            {
+                _openAi?.SaveBaseUrl(OpenAiBaseUrl);
+                ClearProbe();
+            }
+            else if (field == nameof(OpenAiAuthMode))
+            {
+                _openAi?.SaveAuth(OpenAiAuthMode);
+                ClearProbe();
+            }
+            else if (field == nameof(SelectedModelId))
+            {
+                ClearProbe();
+            }
+
             var corrections = new List<string>();
             _settings.Save(BuildSettings(corrections));
 

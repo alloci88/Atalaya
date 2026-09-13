@@ -234,7 +234,8 @@ public sealed class SettingsRatesSurfaceTests
             new Atalaya.Copilot.FakeCopilotAgent(),
             new ToastCenter(),
             new FactoryResetService(
-                context, paths, settings, TestFactory.Account(paths), new OpenSessionStore(paths)),
+                context, paths, settings, TestFactory.Account(paths), new OpenSessionStore(paths),
+                new ProviderSecretStore(paths)),
             new NoReset(),
             context,
             new NavigationService(new EmptyServices()),

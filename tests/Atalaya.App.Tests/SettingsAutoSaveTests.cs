@@ -87,7 +87,10 @@ public sealed class SettingsAutoSaveTests : IDisposable
     public void Ningun_ajuste_editable_se_queda_fuera_de_la_lista_que_los_guarda()
     {
         // Lo observable que NO es una preferencia: es el estado de la página mientras se mira.
-        string[] noSonAjustes = { "Section", "ModelsNotice", "IsBusy" };
+        // «Probe» es lo último que contestó el botón «Probar» del endpoint por API (PROV-3 §2):
+        // habla de una configuración que ya está guardada, así que guardarlo a él no significaría
+        // nada — y volver a enseñarlo al abrir Ajustes sería afirmar hoy lo que se midió ayer.
+        string[] noSonAjustes = { "Section", "ModelsNotice", "IsBusy", "Probe" };
 
         IEnumerable<string> observables = typeof(SettingsViewModel)
             .GetFields(BindingFlags.NonPublic | BindingFlags.Instance)
@@ -122,7 +125,8 @@ public sealed class SettingsAutoSaveTests : IDisposable
         new Atalaya.Copilot.FakeCopilotAgent(),
         toasts ?? new ToastCenter(),
         new FactoryResetService(
-            _hub, _paths, _settings, TestFactory.Account(_paths), new OpenSessionStore(_paths)),
+            _hub, _paths, _settings, TestFactory.Account(_paths), new OpenSessionStore(_paths),
+            new ProviderSecretStore(_paths)),
         new NoReset(),
         _hub,
         new NavigationService(new NoServices()));

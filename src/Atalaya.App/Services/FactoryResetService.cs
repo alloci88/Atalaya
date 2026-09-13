@@ -23,6 +23,12 @@ public sealed record FactoryResetImpact(int Apps, int Findings, int Sessions)
         "Esto afecta a TODO el equipo: tus compañeros verán desaparecer todo en su próxima sincronización.";
 
     /// <summary>Y en esta máquina: la cuenta se desconecta y Atalaya vuelve al primer arranque.</summary>
+    /// <remarks>
+    /// PROV-3 §3 — desde esta entrega se va también la clave de API del endpoint. La frase no la
+    /// enumera porque «los ajustes y la cuenta conectada» ya es lo que el usuario entiende por
+    /// «todo lo mío»; lo que importa es que el borrado la incluya de verdad, y de eso se encarga
+    /// <see cref="FactoryResetService.WipeLocalState"/>.
+    /// </remarks>
     public string LocalWarning =>
         "En esta máquina se borran el clon del hub, las rutas de los clones (machines.json), "
         + "los ajustes y la cuenta conectada. Atalaya arrancará como recién instalada.";
@@ -60,18 +66,28 @@ public sealed class FactoryResetService
     private readonly GitHubAccountService _account;
     private readonly OpenSessionStore _openSession;
 
+    /// <summary>
+    /// <b>Las claves de API</b> (PROV-3 §3). Es un parámetro OBLIGATORIO y no uno opcional a
+    /// propósito: un reset que se pudiera construir sin el almacén sería un reset que puede
+    /// olvidarse de la clave, y olvidarse aquí significa dejar en la máquina —cifrada, pero
+    /// entera— la credencial de pago de quien creía haber borrado todo lo suyo.
+    /// </summary>
+    private readonly ProviderSecretStore _secrets;
+
     public FactoryResetService(
         HubContext hub,
         AppPaths paths,
         SettingsService settings,
         GitHubAccountService account,
-        OpenSessionStore openSession)
+        OpenSessionStore openSession,
+        ProviderSecretStore secrets)
     {
         _hub = hub;
         _paths = paths;
         _settings = settings;
         _account = account;
         _openSession = openSession;
+        _secrets = secrets;
     }
 
     /// <summary>Cuenta lo que hay hoy en el hub: es lo que enumera la confirmación.</summary>
@@ -191,6 +207,11 @@ public sealed class FactoryResetService
         _openSession.Delete();          // una marca huérfana haría «recuperar» una sesión sobre nada
         DeleteTree(_paths.Hub);
         DeleteFile(_paths.MachinesJson);
+        // PROV-3 §3 — y las claves de API, que viven al lado de `auth.dat` y son de lo MISMO que
+        // él: una credencial de esta máquina. Sin esta línea, «Atalaya arrancará como recién
+        // instalada» sería mentira en lo único que cuesta dinero — la clave del endpoint seguiría
+        // en el disco, lista para que la usara quien se quedara con la máquina.
+        DeleteFile(_secrets.Location);
         _settings.ResetToDefaults();    // borra settings.json — el PAT de respaldo vive dentro
         _hub.RefreshCredentials();      // el piloto de la carcasa deja de contar lo de la cuenta que ya no existe
     }
