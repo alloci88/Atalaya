@@ -115,7 +115,7 @@
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding ShowRates}" Value="True">
                                     <Setter Property="MaxHeight"
-                                            Value="{Binding ActualHeight, ElementName=SettingsColumn, Converter={StaticResource Minus}, ConverterParameter=64}" />
+                                            Value="{Binding ActualHeight, ElementName=SettingsColumn, Converter={StaticResource Minus}, ConverterParameter={StaticResource Setting.ActionsHeight}}" />
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -144,8 +144,7 @@
                                           SelectedValue="{Binding SelectedProviderId}"
                                           SelectedValuePath="Id"
                                           DisplayMemberPath="Name"
-                                          MinWidth="{StaticResource Field.SelectWidth}"
-                                          HorizontalAlignment="Left" />
+                                          Style="{StaticResource Field.Select}" />
                                 <c:SavedMark Shown="{Binding Saved[SelectedProviderId].Shown}" />
                             </StackPanel>
                         </DockPanel>
@@ -161,17 +160,27 @@
                                            Visibility="{Binding IsChecked, ElementName=MasModelo, Converter={StaticResource BoolToVisibility}}" />
                             </StackPanel>
                             <StackPanel VerticalAlignment="Top">
-                                <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.XS}">
+                                <!-- LA ÚNICA EXCEPCIÓN DE ANCHO (R-AJUSTES). El desplegable de modelo
+                                     pide 331,5 px medidos con el formato real —«Nombre (id) · ×mult»—
+                                     y los 300 del token se le quedan cortos; además comparte fila con
+                                     un botón y el «Guardado ✓», y a 1064 px de página la fila se salía
+                                     43 px de la columna SIN barra que lo dijera. Así que aquí el
+                                     control se lleva el ancho que sobre: el botón y la marca se
+                                     anclan a la derecha y el desplegable rellena. -->
+                                <DockPanel>
+                                    <c:SavedMark DockPanel.Dock="Right" Margin="{StaticResource Pad.S.Left}"
+                                                 Shown="{Binding Saved[SelectedModelId].Shown}" />
+                                    <Button DockPanel.Dock="Right" Margin="{StaticResource Pad.S.Left}"
+                                            Content="Actualizar lista" Command="{Binding RefreshModelsCommand}"
+                                            Style="{StaticResource Button.Secondary}" />
                                     <ComboBox ItemsSource="{Binding Models}"
                                               AutomationProperties.Name="Modelo"
                                               SelectedValue="{Binding SelectedModelId}"
                                               SelectedValuePath="Id"
                                               DisplayMemberPath="Label"
-                                              MinWidth="{StaticResource Field.SelectWidth}" />
-                                    <Button Content="Actualizar lista" Command="{Binding RefreshModelsCommand}"
-                                            Style="{StaticResource Button.Secondary}" />
-                                    <c:SavedMark Shown="{Binding Saved[SelectedModelId].Shown}" />
-                                </StackPanel>
+                                              Style="{StaticResource Field.Select}"
+                                              HorizontalAlignment="Stretch" />
+                                </DockPanel>
 
                                 <!-- El aviso de la lista de modelos, por el recurso del sistema: el
                                      ámbar escrito a mano de antes era ilegible en tema claro
@@ -228,7 +237,7 @@
                                            Text="{Binding ExhaustiveNotice}" />
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Top"
-                                        c:Stack.Gap="{StaticResource Space.XS}">
+                                        c:Stack.Gap="{StaticResource Space.S}">
                                 <ui:ToggleSwitch IsChecked="{Binding ExhaustiveSweep}" VerticalAlignment="Center" />
                                 <Path Style="{StaticResource Icon}"
                                       Data="{x:Static c:Icons.Warning}"
@@ -305,8 +314,7 @@
                                 <ComboBox ItemsSource="{Binding Currencies}"
                                           SelectedValue="{Binding ShowCostIn}"
                                           AutomationProperties.Name="Mostrar el coste en"
-                                          MinWidth="{StaticResource Field.SelectWidth}"
-                                          HorizontalAlignment="Left" />
+                                          Style="{StaticResource Field.Select}" />
                                 <c:SavedMark Shown="{Binding Saved[ShowCostIn].Shown}" />
                             </StackPanel>
                         </DockPanel>
@@ -341,7 +349,7 @@
                              Y ámbar tampoco: desde aquí no se puede hacer nada, así que un color de
                              alarma sobre algo que no tiene botón se aprende a ignorar. -->
                         <TextBlock Grid.Row="3" Style="{StaticResource Text.Small}"
-                                   Margin="{StaticResource Pad.M.Bottom}"
+                                   Margin="{StaticResource Pad.L.Bottom}"
                                    MaxWidth="{StaticResource Read.MaxWidth}" HorizontalAlignment="Left"
                                    TextWrapping="Wrap"
                                    Visibility="{Binding Rates.HasMissing, Converter={StaticResource BoolToVisibility}}">
@@ -374,22 +382,24 @@
                              se esté mirando la que se esté. «Todos» es la primera opción y el
                              arranque (F5.4 §2), y con una casa elegida su columna se esconde porque
                              diría lo mismo en todas las filas. -->
-                        <StackPanel Grid.Row="4" Orientation="Horizontal"
-                                    Margin="{StaticResource Pad.S.Bottom}"
-                                    VerticalAlignment="Center"
-                                    Visibility="{Binding CanManageRates, Converter={StaticResource BoolToVisibility}}">
-                            <TextBlock Text="Proveedor:" Style="{StaticResource Text.Small}"
-                                       VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
-                            <ComboBox ItemsSource="{Binding Rates.ProviderOptions}"
-                                      SelectedItem="{Binding Rates.SelectedProvider}"
-                                      AutomationProperties.Name="Filtrar las tarifas por proveedor"
-                                      DisplayMemberPath="Label"
-                                      MinWidth="{StaticResource Field.SelectWidth}"
-                                      VerticalAlignment="Center"
-                                      ToolTip="Solo cambia lo que se ve. Guardar escribe la tabla entera." />
-                        </StackPanel>
+                        <DockPanel Grid.Row="4" Style="{StaticResource Setting.Row}"
+                                   Visibility="{Binding CanManageRates, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel Style="{StaticResource Setting.Label}">
+                                <TextBlock Text="Proveedor" Style="{StaticResource Setting.Name}" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Top"
+                                        c:Stack.Gap="{StaticResource Space.S}">
+                                <ComboBox ItemsSource="{Binding Rates.ProviderOptions}"
+                                          SelectedItem="{Binding Rates.SelectedProvider}"
+                                          AutomationProperties.Name="Filtrar las tarifas por proveedor"
+                                          DisplayMemberPath="Label"
+                                          Style="{StaticResource Field.Select}"
+                                          ToolTip="Solo cambia lo que se ve. Guardar escribe la tabla entera." />
+                            </StackPanel>
+                        </DockPanel>
 
                         <Border Grid.Row="5" Style="{StaticResource Panel}"
+                                Margin="{StaticResource Pad.L.Bottom}"
                                 Visibility="{Binding CanManageRates, Converter={StaticResource BoolToVisibility}}">
                             <ScrollViewer Style="{StaticResource Scroll}" x:Name="RatesScroll"
                                           HorizontalScrollBarVisibility="Auto"
@@ -524,7 +534,6 @@
                                       Visibility="{Binding CanManageRates, Converter={StaticResource InverseBoolToVisibility}}" />
 
                         <Border Grid.Row="6" Style="{StaticResource Notice.Warning}"
-                                Margin="{StaticResource Pad.S.Top}"
                                 Visibility="{Binding Rates.Status, Converter={StaticResource NotEmptyToVisibility}}">
                             <DockPanel>
                                 <Path DockPanel.Dock="Left" Style="{StaticResource Notice.Icon}"
@@ -590,8 +599,7 @@
                                           SelectedValue="{Binding Editor}"
                                           SelectedValuePath="Id" DisplayMemberPath="Label"
                                           AutomationProperties.Name="Editor de código"
-                                          MinWidth="{StaticResource Field.SelectWidth}"
-                                          HorizontalAlignment="Left" />
+                                          Style="{StaticResource Field.Select}" />
                                 <Button Content="Probar" Command="{Binding TestEditorCommand}"
                                         AutomationProperties.Name="Probar el editor" />
                                 <c:SavedMark Shown="{Binding Saved[Editor].Shown}" />
@@ -652,7 +660,7 @@
                              se había puesto su propio ancho. La columna ya tiene el suyo
                              (`Setting.ContentWidth`), que es lo que hace que Ajustes tenga UN
                              ritmo y no uno por bloque. -->
-                        <Border Style="{StaticResource Notice.Danger}" Margin="{StaticResource Pad.M.Top}">
+                        <Border Style="{StaticResource Notice.Danger}">
                             <StackPanel>
                                 <TextBlock Text="Zona peligrosa" Style="{StaticResource Text.Lead}"
                                            FontWeight="SemiBold"

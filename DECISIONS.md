@@ -19835,3 +19835,41 @@ arreglo asistido con conversación y diff se pintan en su estado vacío. De paso
 de ESTADO que PROV-2 dejó falsa: las cifras de coste salen de `CostCalculator`, que es como se llama
 desde que dejó de contar en credits. Suite: **2.791** en verde. Un agente diagnosticó, otro escribió
 el test en paralelo, y el arreglo esperó a los dos. De 01:30 a 02:32 del 2026-09-13.
+
+## R-AJUSTES — Una sola rejilla, un solo tamaño de control, un solo ritmo
+
+El usuario abrió el `dist` y lo dijo así: «distintas separaciones, distintos tamaños de control, todo
+parece caótico». Medido antes de tocar (N-2), con la vista real instanciada y colocada a 1480×980 y
+recorriendo el árbol visual: **cuatro patrones de fila** conviviendo —nueve filas canónicas con hueco
+de 12; dos iguales pero con hueco de 8; **una con la etiqueta pegada al control**, la del filtro de
+Tarifas que nació en R-PROV2; y una apilada dentro de un aviso, la zona peligrosa—, **tres alturas de
+control** (38 el desplegable, 36 la caja, 20 el interruptor), **tres anchos** (300, 120, 40) y
+**cuatro ritmos entre bloques** (0, 12, 16 y 24). El caso que el usuario señala, medido: «Mostrar el
+coste en» ponía su combo en **x = 584** y «Proveedor:», dos filas más abajo, en **310,6** — **273,4 px
+de diferencia**, no los 345 que parecían. Queda **un patrón**: etiqueta de **320**
+(`Setting.LabelWidth`, que no cambia de valor — la etiqueta más larga, «Sincronización del hub
+(segundos)», mide 226,9 y el resto es lo que la ayuda necesita para envolver en dos líneas) y control
+en **x = 584** en las cinco secciones, con **un solo ancho de 300** (`Field.SelectWidth`; el mayor que
+algún control pide por contenido sin ser la excepción es el desplegable de editor, 261,5) y **un solo
+alto de 36** (`Control.MinHeight`, D-966). Las cajas numéricas dejan de tener ancho propio: `120` era
+un segundo ancho y el borde derecho a escuadra manda sobre el argumento de que una caja de 300 para un
+«6» promete de más; el token `Field.NumberWidth` se retira porque solo lo usaba Ajustes. **La única
+excepción de ancho** es el desplegable de modelo, que pide **331,5** con el formato real «Nombre (id)
+· ×mult» y se lleva el resto de la columna (**384,6**): compartía fila con un botón y el «Guardado
+✓» y **a 1064 px de página se salía 43 px de la columna sin barra que lo dijera**, o sea que se
+recortaba en silencio. El desplegable gana estilo de la casa, `Field.Select`, **derivado del
+implícito** (D-1006, que es lo que impide que sustituya la plantilla de WPF-UI); su alto va como
+`Height` y no como `MinHeight` porque con mínimo se quedaba en los 38 de la librería, y a 36 el
+contenido ocupa 21, así que sobran 15 y no se recorta. **Tres ritmos verticales, los tres de tokens
+que ya existían**: **24** entre filas de una sección (`Pad.L.Bottom`, en `Setting.Row`), **16** entre
+el título de sección y su primera fila (`Pad.M.Bottom`, en `Setting.SectionTitle`) y **24** entre
+bloques (`Pad.L.Bottom`), con la regla de que **la separación la pone siempre quien va delante** — que
+es como ya funcionaban las filas, y por eso la zona peligrosa pierde su margen superior propio. No se
+añade ningún token y ninguno cambia de valor. **Ningún test nuevo**: el que la spec pedía ya existía
+—`DesignTokenTests.Ningun_XAML_ya_convertido_escribe_un_margen_a_mano`, con su lista de exclusiones
+vacía— y Ajustes ya tenía **cero** literales de margen; lo único que se limpia es un
+`ConverterParameter=64` que duplicaba a mano el token `Setting.ActionsHeight`. Los literales que
+quedan son de rejilla y D-1000 impide moverlos a tokens. Verificado midiendo otra vez después: las
+catorce filas de las cinco secciones arrancan en 584. Un solo agente midió y un solo agente aplicó,
+porque Ajustes es un único XAML y repartirlo por regiones entre cinco solo habría dado conflictos.
+De 01:41 a 09:46 del 2026-09-13, con la revisión del `dist` por medio.

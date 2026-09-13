@@ -1580,14 +1580,32 @@
     <!-- Los campos con ancho digno. El numérico cabe cuatro cifras cómodas; el desplegable, el
          nombre de un modelo con su multiplicador. -->
     <Style x:Key="Field.Number" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
-        <Setter Property="MinWidth" Value="{StaticResource Field.NumberWidth}" />
+        <!-- UN SOLO ANCHO DE CONTROL EN AJUSTES (R-AJUSTES). Tenía 120 propios y el desplegable
+             300: dos cajas que empiezan en la misma x y acaban en dos sitios distintos leen como
+             dos rejillas. El argumento de los 120 —una caja de 300 para un «6» miente sobre lo
+             que acepta— es bueno, pero lo que el usuario ve primero es el borde derecho, y ese
+             manda. `Field.Number` solo lo usa Ajustes, así que esto no sale de la vista. -->
+        <Setter Property="MinWidth" Value="{StaticResource Field.SelectWidth}" />
         <Setter Property="HorizontalAlignment" Value="Left" />
     </Style>
 
-    <!-- El desplegable NO lleva estilo propio, y es a propósito: un `Style TargetType="ComboBox"`
-         sin `BasedOn` SUSTITUYE al implícito de WPF-UI en vez de extenderlo, y el control se queda
-         sin su plantilla (es la lección del `ui:Card` de Métricas). Su ancho mínimo sale del token
-         `Field.SelectWidth`, escrito en el control. -->
+    <!-- EL DESPLEGABLE DE UN FORMULARIO (R-AJUSTES). Aquí no había estilo y cada control escribía
+         su `MinWidth`: cinco copias del mismo token, y el ALTO lo ponía la plantilla de WPF-UI —38,
+         no los 36 de D-966—, así que un desplegable y una caja de texto de la misma fila medían
+         distinto. El aviso que había aquí sigue en pie y es lo que hace que este estilo lleve
+         `BasedOn`: un `Style TargetType="ComboBox"` SIN él sustituye al implícito de WPF-UI en vez
+         de extenderlo, y el control se queda sin plantilla (la lección del `ui:Card` de Métricas).
+         Con `BasedOn` extiende, que es lo que manda D-1006. -->
+    <Style x:Key="Field.Select" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+        <Setter Property="MinWidth" Value="{StaticResource Field.SelectWidth}" />
+        <!-- EL ALTO ES EL DE LA CASA, Y VA COMO `Height` (R-AJUSTES). Con `MinHeight` el
+             desplegable se quedaba en los 38 de la plantilla de WPF-UI mientras la caja de
+             texto medía 36: dos controles de la misma rejilla con dos alturas. Medido con la
+             vista real: a 36 el contenido ocupa 21, así que sobran 15 y no se recorta nada.
+             Es la única forma de igualarlo sin reescribir la plantilla de la librería. -->
+        <Setter Property="Height" Value="{StaticResource Control.MinHeight}" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
 
     <!-- ================================================================ La lista de secciones
 

@@ -385,7 +385,6 @@
     <!-- El ancho MÍNIMO de un campo numérico: cuatro cifras cómodas. La caja del tope de pasadas
          era un cuadrado de dos —un campo que no enseña lo que cabe dentro miente sobre lo que
          acepta—, así que el mínimo se escribe una vez y lo cumplen todos. -->
-    <sys:Double x:Key="Field.NumberWidth">120</sys:Double>
 
     <!-- Y el de un desplegable: lo que ocupa el nombre de un modelo con su multiplicador. -->
     <sys:Double x:Key="Field.SelectWidth">300</sys:Double>
