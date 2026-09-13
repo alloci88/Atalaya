@@ -19804,3 +19804,34 @@ vista, con `Style` y con binding directo, y **no funciona**: no re-evalúa al ca
 sí es un control. Comprobado midiendo el reparto real de la rejilla en las cuatro combinaciones, con
 cabecera y filas siempre cuadradas. Ninguna columna se quita ni se reordena; ni fuente ni disposición
 se tocan. Un agente, de 01:07 a 01:25 del 2026-09-13: 18 minutos.
+
+## BUGFIX-CUENTA — El nombre de un `SharedSizeGroup` no lleva punto
+
+En el `dist` de R-PROV2 la aplicación sacaba **dos diálogos de error y se cerraba**. La causa, del
+log del usuario y no de una conjetura (N-2):
+`System.ArgumentException: "Tarifa.Proveedor" no es un valor válido para la propiedad
+"SharedSizeGroup"`, envuelta en una `XamlParseException` al medir. **WPF exige que ese nombre sea un
+identificador y lo valida al cargar** —medido contra el propio WPF: rechaza `Tarifa.Proveedor` y
+`Tarifa-Proveedor`, acepta `TarifaProveedor` y `Tarifa_Proveedor`—, y lo introdujo **`121ad2d`**
+(R-PROV2) en las dos columnas de proveedor de `SettingsView.xaml`. **Dos diálogos y no 303 porque
+`UnhandledErrors` agrupa por firma en una ventana de 10 s (D-1047)** y había dos firmas; el log
+cuenta las 303 repeticiones, una por pasada de dibujo, porque la vista vuelve a medirse en cada
+fotograma y vuelve a lanzar. **Corrección a lo que este equipo escribió primero** —y que el commit
+`2a4c904` da por bueno—: no revienta «una vez por tarifa». Medido rompiendo cada copia por separado,
+**WPF no valida `SharedSizeGroup` dentro de un `DataTemplate`**: la que lanza es la de la cabecera,
+XAML directo de la vista, y lanza al construirla, con tabla o sin ella. Por qué no lo vio nada: el
+compilador no valida ese valor, el barrido de superficie de Tarifas lee el XAML **como texto**, y
+`--selfcheck` solo pinta la primera vista desde F27 (N-8) — que no es Ajustes. Es la segunda vez que
+ese hueco deja pasar un cierre, después de BUGFIX-F36-2, así que la entrega deja **la regla que
+faltaba**: `RailViewsPaintTests` monta el contenedor completo como `--selfcheck`, recorre **las diez
+entradas del raíl** —de los datos de `NavGroups`, no de una lista a mano— con un hub sembrado,
+**mide y coloca** cada página a 1440×900 —Ajustes una vez por sección, que es la única que esconde
+media vista tras `Collapsed`— y falla **nombrando la vista** y su excepción. Comprobado en rojo sobre
+el árbol con el fallo —nombraba solo Ajustes, las otras nueve páginas pintaban— y en verde con el
+arreglo. `--selfcheck` **no se amplía**: medido, pintar las diez páginas lo lleva de **1,01 s a
+2,03 s** y pasa del techo de un par de segundos; el pintado son 315 ms y el resto es resolver nueve
+view-models que hoy no se resuelven. Queda dicho lo que el test **no** cubre: Cuenta conectada y el
+arreglo asistido con conversación y diff se pintan en su estado vacío. De paso se corrige una línea
+de ESTADO que PROV-2 dejó falsa: las cifras de coste salen de `CostCalculator`, que es como se llama
+desde que dejó de contar en credits. Suite: **2.791** en verde. Un agente diagnosticó, otro escribió
+el test en paralelo, y el arreglo esperó a los dos. De 01:30 a 02:32 del 2026-09-13.
